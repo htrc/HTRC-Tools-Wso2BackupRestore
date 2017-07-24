@@ -33,8 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Vector;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -132,6 +132,9 @@ public class RestoreAction {
         Map<String, String> roleMap = new HashMap<>();
         roleMap.put(backupMeta.getAdminRoleName().toLowerCase(), registryUtils.getAdminRole());
         roleMap.put(backupMeta.getEveryoneRole().getName().toLowerCase(), registryUtils.getEveryoneRole());
+
+        // needed to fix old WSO2 data
+        roleMap.put("everyone", registryUtils.getEveryoneRole());
 
         Set<String> reservedRoleNames = new HashSet<>();
         reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
@@ -244,9 +247,12 @@ public class RestoreAction {
      */
     protected void createRole(Role role) throws BackupRestoreException {
         try {
-            Permission[] permissions = role.getPermissions().stream()
-                .map(p -> new Permission(p, UserMgtConstants.EXECUTE_ACTION))
-                .toArray(Permission[]::new);
+            List<String> rolePermissions = role.getPermissions();
+            Permission[] permissions = new Permission[rolePermissions.size()];
+            for (int i = 0, iMax = rolePermissions.size(); i < iMax; i++) {
+                String permission = rolePermissions.get(i);
+                permissions[i] = new Permission(permission, UserMgtConstants.EXECUTE_ACTION);
+            }
 
             userStoreManager.addRole(role.getName(), null, permissions);
         } catch (UserStoreException e) {
@@ -265,9 +271,13 @@ public class RestoreAction {
         try {
             String userName = user.getName();
 
-            Map<String, String> userClaims = user.getClaims().stream()
-                .filter(c -> c.getUri().startsWith("http://wso2.org/claims/"))
-                .collect(Collectors.toMap(Claim::getUri, Claim::getValue));
+            Map<String, String> userClaims = new HashMap<>();
+            for (Claim claim : user.getClaims()) {
+                if (!claim.getUri().startsWith("http://wso2.org/claims/"))
+                    continue;
+
+                userClaims.put(claim.getUri(), claim.getValue());
+            }
 
             String[] userRoles = user.getRoles().toArray(new String[0]);
             String password = userName + "54321";
@@ -609,19 +619,21 @@ public class RestoreAction {
             int volumeCount = 0;
 
             if (worksetContent != null) {
-                List<Volume> volumes = worksetContent.getVolumes().stream()
-                    .filter(v -> !v.getId().trim().isEmpty())
-                    .map(v -> {
-                        // fix for bad worksets in production
-                       Volume vol = new Volume();
-                       String id = v.getId().split("\\s")[0];
-                       vol.setId(id);
-                       if (!v.getProperties().isEmpty()) {
-                           vol.setProperties(v.getProperties());
-                       }
-                       return vol;
-                    })
-                    .collect(Collectors.toList());
+                List<Volume> volumes = new Vector<>();
+                for (Volume volume : worksetContent.getVolumes()) {
+                    if (volume.getId().trim().isEmpty())
+                        continue;
+
+                    Volume repairedVolume = new Volume();
+                    String id = volume.getId().split("\\s")[0];
+                    repairedVolume.setId(id);
+                    if (!volume.getProperties().isEmpty()) {
+                        repairedVolume.setProperties(volume.getProperties());
+                    }
+
+                    volumes.add(repairedVolume);
+                }
+
                 volumeCount = volumes.size();
                 resource.setContentStream(createWorksetContentStream(volumes));
             }
