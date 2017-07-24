@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+    xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
+    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/workset"
+    elementFormDefault="qualified">
+
+    <include schemaLocation="comment.xsd"/>
+    <include schemaLocation="tag.xsd"/>
+    <include schemaLocation="volume.xsd"/>
+
+    <complexType name="WorksetMeta">
+        <sequence>
+            <element minOccurs="0" name="version" type="long"/>
+            <element name="name" type="string"/>
+            <element name="description" type="string"/>
+            <element minOccurs="0" name="author" type="string"/>
+            <element minOccurs="0" name="rating">
+                <simpleType>
+                    <restriction base="int">
+                        <minInclusive value="0"/>
+                        <maxInclusive value="5"/>
+                    </restriction>
+                </simpleType>
+            </element>
+            <element minOccurs="0" name="avgRating" type="float"/>
+            <element minOccurs="0" name="created" type="dateTime"/>
+            <element minOccurs="0" name="lastModified" type="dateTime"/>
+            <element minOccurs="0" name="lastModifiedBy" type="string"/>
+            <element minOccurs="0" ref="workset:tags"/>
+            <element minOccurs="0" ref="workset:comments"/>
+            <element minOccurs="0" name="volumeCount" type="int"/>
+            <element minOccurs="0" name="public" type="boolean"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="WorksetContent">
+        <sequence>
+            <element ref="workset:volumes"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="Workset">
+        <sequence>
+            <element name="metadata" type="workset:WorksetMeta"/>
+            <element minOccurs="0" name="content" type="workset:WorksetContent"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="Worksets">
+        <sequence>
+            <element minOccurs="0" maxOccurs="unbounded" ref="workset:workset"/>
+        </sequence>
+    </complexType>
+
+    <element name="workset" type="workset:Workset">
+        <unique name="TagUnique">
+            <selector xpath="workset:metadata/workset:tags/workset:tag"/>
+            <field xpath="."/>
+        </unique>
+    </element>
+
+    <element name="worksets" type="workset:Worksets"/>
+</schema>

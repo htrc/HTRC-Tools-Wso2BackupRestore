@@ -1,0 +1,140 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.hathitrust.htrc</groupId>
+    <artifactId>wso2br</artifactId>
+    <version>1.0</version>
+    <packaging>war</packaging>
+
+    <name>WSO2 Backup Restore</name>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <CApp.type>webapp/jaxws</CApp.type>
+        <servlet.version>2.5</servlet.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
+            <version>${servlet.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wso2.carbon.governance</groupId>
+            <artifactId>org.wso2.carbon.governance.api</artifactId>
+            <version>4.7.3</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.typesafe</groupId>
+            <artifactId>config</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>wso2br</finalName>
+
+        <plugins>
+            <plugin>
+                <groupId>org.jvnet.jaxb2.maven2</groupId>
+                <artifactId>maven-jaxb2-plugin</artifactId>
+                <version>0.13.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <generateDirectory>${project.build.directory}/generated-sources
+                            </generateDirectory>
+                            <schemaDirectory>${basedir}/src/main/resources/schemas</schemaDirectory>
+                            <episode>false</episode>
+                            <extension>true</extension>
+                            <args>
+                                <arg>-Xxew</arg>
+                                <arg>-Xxew:instantiate lazy</arg>
+                                <arg>-Xxew:control
+                                    ${basedir}/src/main/resources/schemas/control.txt
+                                </arg>
+                            </args>
+                            <plugins>
+                                <plugin>
+                                    <groupId>com.github.jaxb-xew-plugin</groupId>
+                                    <artifactId>jaxb-xew-plugin</artifactId>
+                                    <version>1.9</version>
+                                </plugin>
+                            </plugins>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>pl.project13.maven</groupId>
+                <artifactId>git-commit-id-plugin</artifactId>
+                <version>2.2.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
+                <configuration>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <gitDescribe>
+                        <dirty>-SNAPSHOT</dirty>
+                    </gitDescribe>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <filteringDeploymentDescriptors>true</filteringDeploymentDescriptors>
+                    <archive>
+                        <manifestEntries>
+                            <Git-Sha>${git.commit.id}</Git-Sha>
+                            <Git-Branch>${git.branch}</Git-Branch>
+                            <Git-Version>${git.commit.id.describe}</Git-Version>
+                            <Git-Dirty>${git.dirty}</Git-Dirty>
+                            <Build-Date>${git.build.time}</Build-Date>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <organization>
+        <name>HathiTrust Research Center</name>
+        <url>http://www.hathitrust.org/htrc</url>
+    </organization>
+
+    <repositories>
+        <repository>
+            <id>nexus</id>
+            <name>HTRC Nexus Repository</name>
+            <url>http://nexus.htrc.illinois.edu/content/groups/public/</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>nexus</id>
+            <name>HTRC Nexus Repository</name>
+            <url>http://nexus.htrc.illinois.edu/content/groups/public/</url>
+        </pluginRepository>
+    </pluginRepositories>
+</project>
