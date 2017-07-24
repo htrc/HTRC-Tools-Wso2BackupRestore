@@ -240,12 +240,14 @@ public class BackupAction {
             Volumes result = null;
 
             if (resource.getContent() != null) {
-                result = (Volumes) jaxbVolumesContext.createUnmarshaller()
-                    .unmarshal(resource.getContentStream());
+                try (InputStream contentStream = resource.getContentStream()) {
+                    result = (Volumes) jaxbVolumesContext.createUnmarshaller()
+                        .unmarshal(contentStream);
+                }
             }
 
             return result;
-        } catch (JAXBException e) {
+        } catch (JAXBException | IOException e) {
             throw new RegistryException("Error unmarshalling workset volumes", e);
         }
     }
