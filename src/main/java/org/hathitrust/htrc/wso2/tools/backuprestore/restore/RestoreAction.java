@@ -133,6 +133,9 @@ public class RestoreAction {
         roleMap.put(backupMeta.getAdminRoleName().toLowerCase(), registryUtils.getAdminRole());
         roleMap.put(backupMeta.getEveryoneRole().getName().toLowerCase(), registryUtils.getEveryoneRole());
 
+        // needed to fix old WSO2 data
+        roleMap.put("everyone", registryUtils.getEveryoneRole());
+
         Set<String> reservedRoleNames = new HashSet<>();
         reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
         reservedRoleNames.add(registryUtils.getEveryoneRole().toLowerCase());

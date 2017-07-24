@@ -131,7 +131,10 @@ public class BackupAction {
         excludedUsers.add(backupMeta.getAdminUserName());
 
         log("Retrieving the list of users...");
-        List<User> users = getAllUsers(excludedUsers);
+        Set<String> excludedProfileClaims = new HashSet<>();
+        excludedProfileClaims.add("http://wso2.org/claims/role");
+        excludedProfileClaims.add("http://wso2.org/claims/userid");
+        List<User> users = getAllUsers(excludedUsers, excludedProfileClaims);
 
         List<UserFiles> allUsersFiles = new Vector<>();
         List<Workset> allUsersWorksets = new Vector<>();
@@ -647,18 +650,24 @@ public class BackupAction {
      * Retrieves a user's profile claims
      *
      * @param userName The user name
+     * @param excludedProfileClaims The profile claims to exclude
      * @return The list of profile claims
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
      */
-    protected List<Claim> getUserProfileClaims(String userName) throws BackupRestoreException {
+    protected List<Claim> getUserProfileClaims(String userName, Set<String> excludedProfileClaims)
+        throws BackupRestoreException {
         try {
             org.wso2.carbon.user.core.claim.Claim[] wso2Claims =
                 userStoreManager.getUserClaimValues(userName, "default");
 
             List<Claim> userClaims = new Vector<>();
             for (org.wso2.carbon.user.core.claim.Claim wso2Claim : wso2Claims) {
+                String claimUri = wso2Claim.getClaimUri();
+                if (excludedProfileClaims.contains(claimUri))
+                    continue;
+
                 Claim claim = new Claim();
-                claim.setUri(wso2Claim.getClaimUri());
+                claim.setUri(claimUri);
                 claim.setValue(wso2Claim.getValue());
                 userClaims.add(claim);
             }
@@ -674,24 +683,29 @@ public class BackupAction {
      * Retrieves the list of users (with optional exclusions)
      *
      * @param excludedUsers The set of users to exclude
+     * @param excludedProfileClaims The set of profile claims to exclude
      * @return The list of users
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
      */
-    protected List<User> getAllUsers(Set<String> excludedUsers) throws BackupRestoreException {
+    protected List<User> getAllUsers(Set<String> excludedUsers, Set<String> excludedProfileClaims)
+        throws BackupRestoreException {
         try {
             String[] wso2Users = userStoreManager.listUsers("*", Integer.MAX_VALUE);
             List<User> users = new ArrayList<>(wso2Users.length);
-            final String everyoneRoleName = registryUtils.getEveryoneRole();
+
+            Set<String> excludedRoles = new HashSet<>();
+            excludedRoles.add(registryUtils.getEveryoneRole());
+            excludedRoles.add("everyone");
 
             for (String userName : wso2Users) {
                 if (excludedUsers.contains(userName)) {
                     continue;
                 }
 
-                List<Claim> userProfileClaims = getUserProfileClaims(userName);
+                List<Claim> userProfileClaims = getUserProfileClaims(userName, excludedProfileClaims);
                 List<String> userRoles = new Vector<>();
                 for (String role : userStoreManager.getRoleListOfUser(userName)) {
-                    if (role.equalsIgnoreCase(everyoneRoleName))
+                    if (excludedRoles.contains(role))
                         continue;
 
                     userRoles.add(role);
