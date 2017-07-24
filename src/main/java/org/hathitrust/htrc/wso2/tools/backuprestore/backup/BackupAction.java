@@ -25,17 +25,16 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Vector;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -46,6 +45,7 @@ import org.hathitrust.htrc.wso2.tools.backuprestore.RegistryExtensionConfig;
 import org.hathitrust.htrc.wso2.tools.backuprestore.exceptions.BackupRestoreException;
 import org.hathitrust.htrc.wso2.tools.backuprestore.utils.RegistryUtils;
 import org.hathitrust.htrc.wso2.tools.backuprestore.utils.Utils;
+import org.hathitrust.htrc.wso2.tools.backuprestore.utils.Utils.StringJoiner;
 import org.hathitrust.htrc.wso2.tools.backuprestore.utils.Wso2Utils;
 import org.wso2.carbon.registry.core.ActionConstants;
 import org.wso2.carbon.registry.core.Collection;
@@ -343,28 +343,27 @@ public class BackupAction {
         calendar.setTime(resource.getCreatedTime());
         worksetMeta.setCreated(calendar);
 
-        List<String> resTags = Arrays.stream(tags).map(Tag::getTagName)
-            .collect(Collectors.toList());
-        worksetMeta.setTags(resTags);
+        List<String> resTags = worksetMeta.getTags();
+        for (Tag tag : tags) {
+            resTags.add(tag.getTagName());
+        }
 
-        List<Comment> resComments = Arrays.stream(comments)
-            .map(comment -> {
-                Comment c = new Comment();
-                c.setAuthor(comment.getAuthorUserName());
-                c.setText(comment.getText());
+        List<Comment> resComments = worksetMeta.getComments();
+        for (org.wso2.carbon.registry.core.Comment comment : comments) {
+            Comment c = new Comment();
+            c.setAuthor(comment.getAuthorUserName());
+            c.setText(comment.getText());
 
-                Calendar cal = Calendar.getInstance();
-                cal.setTime(comment.getCreatedTime());
-                c.setCreated(cal);
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(comment.getCreatedTime());
+            c.setCreated(cal);
 
-                cal = Calendar.getInstance();
-                cal.setTime(comment.getLastModified());
-                c.setLastModified(cal);
+            cal = Calendar.getInstance();
+            cal.setTime(comment.getLastModified());
+            c.setLastModified(cal);
 
-                return c;
-            })
-            .collect(Collectors.toList());
-        worksetMeta.setComments(resComments);
+            resComments.add(c);
+        }
 
         return worksetMeta;
     }
@@ -525,36 +524,39 @@ public class BackupAction {
             Map<String, String> rolePerms = new HashMap<>();
             for (String roleName : allowedGet) {
                 if (roleName.equalsIgnoreCase(adminRoleName)) continue;
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "G");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "G");
             }
             for (String roleName : allowedDelete) {
                 if (roleName.equalsIgnoreCase(adminRoleName)) continue;
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "D");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "D");
             }
             for (String roleName : allowedPut) {
                 if (roleName.equalsIgnoreCase(adminRoleName)) continue;
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "P");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "P");
             }
             for (String roleName : allowedAuthorize) {
                 if (roleName.equalsIgnoreCase(adminRoleName)) continue;
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "A");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "A");
             }
             for (String roleName : deniedGet) {
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "g");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "g");
             }
             for (String roleName : deniedDelete) {
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "d");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "d");
             }
             for (String roleName : deniedPut) {
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "p");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "p");
             }
             for (String roleName : deniedAuthorize) {
-                rolePerms.put(roleName, rolePerms.getOrDefault(roleName, "") + "a");
+                rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "a");
             }
 
-            return rolePerms.entrySet().stream()
-                .map(e -> String.format("%s:%s", e.getKey(), e.getValue()))
-                .collect(Collectors.joining("|"));
+            StringJoiner joiner = new StringJoiner("|");
+            for (Entry<String, String> entry : rolePerms.entrySet()) {
+                joiner.add(String.format("%s:%s", entry.getKey(), entry.getValue()));
+            }
+
+            return joiner.toString();
         } catch (UserStoreException e) {
             throw new RegistryException("Error retrieving resource permissions for: " + resId, e);
         }
@@ -653,12 +655,15 @@ public class BackupAction {
             org.wso2.carbon.user.core.claim.Claim[] wso2Claims =
                 userStoreManager.getUserClaimValues(userName, "default");
 
-            return Arrays.stream(wso2Claims).map(c -> {
+            List<Claim> userClaims = new Vector<>();
+            for (org.wso2.carbon.user.core.claim.Claim wso2Claim : wso2Claims) {
                 Claim claim = new Claim();
-                claim.setUri(c.getClaimUri());
-                claim.setValue(c.getValue());
-                return claim;
-            }).collect(Collectors.toList());
+                claim.setUri(wso2Claim.getClaimUri());
+                claim.setValue(wso2Claim.getValue());
+                userClaims.add(claim);
+            }
+
+            return userClaims;
         } catch (UserStoreException e) {
             throw new BackupRestoreException(
                 "Error retrieving user profile claims for: " + userName, e);
@@ -684,9 +689,13 @@ public class BackupAction {
                 }
 
                 List<Claim> userProfileClaims = getUserProfileClaims(userName);
-                List<String> userRoles = Arrays.stream(userStoreManager.getRoleListOfUser(userName))
-                    .filter(r -> !r.equalsIgnoreCase(everyoneRoleName))
-                    .collect(Collectors.toList());
+                List<String> userRoles = new Vector<>();
+                for (String role : userStoreManager.getRoleListOfUser(userName)) {
+                    if (role.equalsIgnoreCase(everyoneRoleName))
+                        continue;
+
+                    userRoles.add(role);
+                }
 
                 User user = new User();
                 user.setName(userName);
@@ -711,8 +720,13 @@ public class BackupAction {
      */
     protected List<Role> getAllRoles(Set<String> excludedRoles) throws BackupRestoreException {
         try {
-            List<String> allRoleNames = Arrays.stream(userStoreManager.getRoleNames())
-                .filter(r -> !excludedRoles.contains(r)).collect(Collectors.toList());
+            List<String> allRoleNames = new Vector<>();
+            for (String roleName : userStoreManager.getRoleNames()) {
+                if (excludedRoles.contains(roleName))
+                    continue;
+
+                allRoleNames.add(roleName);
+            }
 
             List<Role> roles = new ArrayList<>();
 
