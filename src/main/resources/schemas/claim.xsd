@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+    xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
+    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/security"
+    elementFormDefault="qualified">
+
+    <complexType name="Claim">
+        <all>
+            <element name="uri" type="anyURI"/>
+            <element name="value" type="string"/>
+        </all>
+    </complexType>
+
+    <complexType name="Claims">
+        <sequence>
+            <element minOccurs="0" maxOccurs="unbounded" ref="security:claim"/>
+        </sequence>
+    </complexType>
+
+    <element name="claim" type="security:Claim"/>
+    <element name="claims" type="security:Claims"/>
+</schema>

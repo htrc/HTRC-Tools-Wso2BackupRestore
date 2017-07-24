@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+    xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
+    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/security"
+    elementFormDefault="qualified">
+
+    <include schemaLocation="claim.xsd"/>
+    <include schemaLocation="role.xsd"/>
+
+    <complexType name="User">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="roles">
+                <complexType>
+                    <sequence>
+                        <element name="role" maxOccurs="unbounded" type="string"/>
+                    </sequence>
+                </complexType>
+            </element>
+            <element ref="security:claims"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="Users">
+        <sequence>
+            <element minOccurs="0" maxOccurs="unbounded" ref="security:user"/>
+        </sequence>
+    </complexType>
+
+    <element name="user" type="security:User"/>
+    <element name="users" type="security:Users"/>
+</schema>

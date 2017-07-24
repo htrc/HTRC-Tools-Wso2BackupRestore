@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+    xmlns:backup="http://registry.htrc.i3.illinois.edu/entities/backup"
+    xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
+    xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
+    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/backup"
+    elementFormDefault="qualified">
+
+    <import schemaLocation="security.xsd"
+        namespace="http://registry.htrc.i3.illinois.edu/entities/security"/>
+    <import schemaLocation="workset.xsd"
+        namespace="http://registry.htrc.i3.illinois.edu/entities/workset"/>
+
+    <complexType name="BackupMeta">
+        <all>
+            <element name="createdAt" type="dateTime"/>
+            <element name="adminUserName" type="string"/>
+            <element name="adminRoleName" type="string"/>
+            <element name="everyoneRole" type="security:Role"/>
+        </all>
+    </complexType>
+
+    <complexType name="ResProperty">
+        <sequence>
+            <element name="key" type="string"/>
+            <element name="value" type="string"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="ResProperties">
+        <sequence>
+            <element name="property" type="backup:ResProperty" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="RegFile">
+        <sequence>
+            <element name="name" type="string"/>
+            <element name="parentPath" type="string" minOccurs="0"/>
+            <element name="contentType" type="string"/>
+            <element name="author" type="string"/>
+            <element name="description" type="string" minOccurs="0"/>
+            <element name="createdTime" type="dateTime"/>
+            <element name="lastModified" type="dateTime"/>
+            <element name="lastModifiedBy" type="string"/>
+            <element name="permissions" type="string"/>
+            <element name="properties" type="backup:ResProperties"/>
+            <element name="checksum" type="string" minOccurs="0"/>
+            <element name="regFiles" type="backup:RegFiles"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="RegFiles">
+        <sequence>
+            <element name="regFile" type="backup:RegFile" minOccurs="0" maxOccurs="unbounded"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="UserFiles">
+        <sequence>
+            <element name="user" type="string"/>
+            <element name="regFiles" minOccurs="0" type="backup:RegFiles"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="UserFilespace">
+        <sequence>
+            <element name="userFiles" maxOccurs="unbounded" type="backup:UserFiles"/>
+        </sequence>
+    </complexType>
+
+    <complexType name="PublicFilespace">
+        <sequence>
+            <element name="regFiles" minOccurs="0" type="backup:RegFiles"/>
+        </sequence>
+    </complexType>
+
+    <element name="backup">
+        <complexType>
+            <sequence>
+                <element name="metadata" type="backup:BackupMeta"/>
+                <element ref="security:roles"/>
+                <element ref="security:users"/>
+                <element ref="workset:worksets"/>
+                <element name="userFilespace" type="backup:UserFilespace" minOccurs="0"/>
+                <element name="publicFilespace" type="backup:PublicFilespace" minOccurs="0"/>
+            </sequence>
+        </complexType>
+    </element>
+</schema>
