@@ -126,6 +126,7 @@ public class BackupAction {
 
         log("Retrieving the list of roles...");
         List<Role> roles = getAllRoles(excludedRoles);
+        log("Retrieved %,d roles", roles.size());
 
         Set<String> excludedUsers = new HashSet<>();
         excludedUsers.add(backupMeta.getAdminUserName());
@@ -135,6 +136,7 @@ public class BackupAction {
         excludedProfileClaims.add("http://wso2.org/claims/role");
         excludedProfileClaims.add("http://wso2.org/claims/userid");
         List<User> users = getAllUsers(excludedUsers, excludedProfileClaims);
+        log("Retrieved %,d users", users.size());
 
         List<UserFiles> allUsersFiles = new Vector<>();
         List<Workset> allUsersWorksets = new Vector<>();
@@ -240,12 +242,14 @@ public class BackupAction {
             Volumes result = null;
 
             if (resource.getContent() != null) {
-                result = (Volumes) jaxbVolumesContext.createUnmarshaller()
-                    .unmarshal(resource.getContentStream());
+                try (InputStream contentStream = resource.getContentStream()) {
+                    result = (Volumes) jaxbVolumesContext.createUnmarshaller()
+                        .unmarshal(contentStream);
+                }
             }
 
             return result;
-        } catch (JAXBException e) {
+        } catch (JAXBException | IOException e) {
             throw new RegistryException("Error unmarshalling workset volumes", e);
         }
     }
