@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Vector;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import javax.xml.bind.JAXBContext;
@@ -74,6 +73,7 @@ public class RestoreAction {
 
     private static final String SET_RES_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE CONCAT(rp.REG_PATH_VALUE, '/', rr.REG_NAME) = ?";
     private static final String SET_COLL_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE rp.REG_PATH_VALUE = ? AND rr.REG_NAME IS NULL";
+    protected static final Pattern VALID_HTRC_ID_REGEX = Pattern.compile("^\\w{2,4}\\.\\S{4,30}$");
 
     private final PrintWriter progressWriter;
     private final RegistryUtils registryUtils;
@@ -85,6 +85,9 @@ public class RestoreAction {
     private final DataSource dataSource;
     private final JAXBContext jaxbVolumesContext;
     private final SystemUserRoleManager systemUserRoleManager;
+    private int numFilesRestored;
+    private int numMalformedWorksets;
+
 
     /**
      * Restore constructor
@@ -127,6 +130,9 @@ public class RestoreAction {
         if (!filesDir.exists()) {
             throw new BackupRestoreException("Invalid backup directory (missing files dir)");
         }
+
+        numFilesRestored = 0;
+        numMalformedWorksets = 0;
 
         log("Loading backup file...");
         Backup backup = readBackup(backupDir);
@@ -184,8 +190,10 @@ public class RestoreAction {
             restoreWorkset(workset);
         }
 
-        log("All done! Restored %,d roles, %,d users, and %,d worksets",
-            backup.getRoles().size(), backup.getUsers().size(), backup.getWorksets().size());
+        log("All done! Restored %,d roles, %,d users, %,d files, and %,d worksets "
+                + "(of which %,d were tagged as malformed)", backup.getRoles().size(),
+            backup.getUsers().size(), numFilesRestored, backup.getWorksets().size(),
+            numMalformedWorksets);
     }
 
     /**
@@ -325,39 +333,38 @@ public class RestoreAction {
             userStoreManager.addUser(userName, password, userRoles, userClaims, "default");
 
             if (createHome) {
-                String regUserHome = config.getUserHomePath(userName);
-                String regUserFiles = config.getUserFilesPath(userName);
-                String regUserWorksets = config.getUserWorksetsPath(userName);
-                String regUserJobs = config.getUserJobsPath(userName);
+                try {
+                    String regUserHome = config.getUserHomePath(userName);
+                    String regUserFiles = config.getUserFilesPath(userName);
+                    String regUserWorksets = config.getUserWorksetsPath(userName);
+                    String regUserJobs = config.getUserJobsPath(userName);
 
-                Collection userHomeCollection = adminRegistry.newCollection();
-                regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
+                    Collection userHomeCollection = adminRegistry.newCollection();
+                    regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
 
-                String homePermissions = String.format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
-                setResourceRolePermissions(regUserHome, homePermissions, null);
+                    String homePermissions = String
+                        .format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
+                    setResourceRolePermissions(regUserHome, homePermissions, null);
 
-                Collection filesCollection = adminRegistry.newCollection();
-                String extra = userName.endsWith("s") ? "'" : "'s";
-                filesCollection.setDescription(userName + extra + " file space");
-                regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
+                    Collection filesCollection = adminRegistry.newCollection();
+                    String extra = userName.endsWith("s") ? "'" : "'s";
+                    filesCollection.setDescription(userName + extra + " file space");
+                    regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
 
-                Collection worksetsCollection = adminRegistry.newCollection();
-                worksetsCollection.setDescription(userName + extra + " worksets");
-                regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
+                    Collection worksetsCollection = adminRegistry.newCollection();
+                    worksetsCollection.setDescription(userName + extra + " worksets");
+                    regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
 
-                Collection jobsCollection = adminRegistry.newCollection();
-                jobsCollection.setDescription(userName + extra + " jobs");
-                regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
+                    Collection jobsCollection = adminRegistry.newCollection();
+                    jobsCollection.setDescription(userName + extra + " jobs");
+                    regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
+                } catch (RegistryException e) {
+                    log("Error while creating home collection for user '%s' (Cause: %s)",
+                        userName, e.getMessage());
+                }
             }
-        } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException e) {
-            // TODO Find a better way to deal with invalid users
-            try {
-                log("Unable to create user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
-                userStoreManager.deleteUser(user.getName());
-                userStoreManager.deleteRole(user.getName());
-            } catch (Exception ignored) {
-                log("Problem removing user '%s' (Cause: %s)\n", user.getName(), ignored.getMessage());
-            }
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            log("Error while creating user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
             //throw new BackupRestoreException("Unable to create user: " + user.getName(), e);
         }
     }
@@ -510,6 +517,8 @@ public class RestoreAction {
                         setResourceMetadata(fullPath,
                             owner, file.getCreatedTime().getTime(),
                             file.getLastModifiedBy(), file.getLastModified().getTime());
+
+                        numFilesRestored++;
                     }
                 }
             }
@@ -659,19 +668,16 @@ public class RestoreAction {
             int volumeCount = 0;
 
             if (worksetContent != null) {
-                List<Volume> volumes = new Vector<>();
-                for (Volume volume : worksetContent.getVolumes()) {
-                    if (volume.getId().trim().isEmpty())
-                        continue;
+                List<Volume> volumes = worksetContent.getVolumes();
 
-                    Volume repairedVolume = new Volume();
-                    String id = volume.getId().split("\\s")[0];
-                    repairedVolume.setId(id);
-                    if (!volume.getProperties().isEmpty()) {
-                        repairedVolume.setProperties(volume.getProperties());
+                // check the volumes to make sure they contain not-obviously-invalid IDs
+                for (Volume volume : volumes) {
+                    String volumeId = volume.getId();
+                    if (!VALID_HTRC_ID_REGEX.matcher(volumeId).matches()) {
+                        worksetMeta.getTags().add("htrc::malformed");
+                        numMalformedWorksets++;
+                        break;
                     }
-
-                    volumes.add(repairedVolume);
                 }
 
                 volumeCount = volumes.size();
@@ -696,14 +702,6 @@ public class RestoreAction {
             setResourceMetadata(worksetPath,
                 author, worksetMeta.getCreated().getTime(),
                 worksetMeta.getLastModifiedBy(), worksetMeta.getLastModified().getTime());
-
-//            registry.rateResource(worksetPath, worksetMeta.getRating());
-//            for (Comment comment : worksetMeta.getComments()) {
-//                UserRegistry commentAuthorRegistry = registryUtils.getUserRegistry(comment.getAuthor());
-//                org.wso2.carbon.registry.core.Comment regComment =
-//                    new org.wso2.carbon.registry.core.Comment(comment.getText());
-//                commentAuthorRegistry.addComment(worksetPath, regComment);
-//            }
         } catch (RegistryException e) {
             throw new BackupRestoreException("Cannot create resource from workset", e);
         }
