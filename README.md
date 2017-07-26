@@ -17,11 +17,22 @@ and roles (the configuration limits the maximum number of users and roles that c
 the API)
 
 In file `<WSO2HOME>/repository/conf/user-mgt.xml`, for the `<UserStoreManager>` definition that's 
-active, the following properties need to be set:
+active, the following properties need to be set (0 = unlimited):
 ```xml
     <Property name="MaxRoleNameListLength">0</Property>
     <Property name="MaxUserNameListLength">0</Property>
 ```
+
+Also, for large backups, the default timeout for stuck thread detection needs to be increased, 
+otherwise the restore operation will fail. The timeout can be increased by editing the file
+`<WSO2HOME>/repository/conf/tomcat/catalina-server.xml` and changing the default value of `600` of
+the following setting to a larger value:
+```xml
+  <Valve className="org.wso2.carbon.tomcat.ext.valves.CarbonStuckThreadDetectionValve" threshold="600"/>
+```
+
+The WSO2 server must be restarted for the above changes to take effect, before the backup or
+restore operation is attempted.
 
 # API
 
