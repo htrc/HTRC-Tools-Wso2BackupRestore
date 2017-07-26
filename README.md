@@ -31,6 +31,9 @@ the following setting to a larger value:
   <Valve className="org.wso2.carbon.tomcat.ext.valves.CarbonStuckThreadDetectionValve" threshold="600"/>
 ```
 
+It's also possible that the JVM memory settings for WSO2 need to be increased, for larger backups. To do
+that, edit `<WSO2HOME>/bin/wso2server.sh` and modify the JVM memory settings (`-Xmx`, for example) as necessary.
+
 The WSO2 server must be restarted for the above changes to take effect, before the backup or
 restore operation is attempted.
 
