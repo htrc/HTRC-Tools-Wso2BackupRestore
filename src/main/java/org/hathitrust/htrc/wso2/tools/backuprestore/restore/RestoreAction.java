@@ -26,6 +26,7 @@ import java.io.Reader;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Vector;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import javax.xml.bind.JAXBContext;
@@ -59,6 +59,7 @@ import org.wso2.carbon.user.core.AuthorizationManager;
 import org.wso2.carbon.user.core.Permission;
 import org.wso2.carbon.user.core.UserRealm;
 import org.wso2.carbon.user.core.UserStoreManager;
+import org.wso2.carbon.user.core.system.SystemUserRoleManager;
 import org.wso2.carbon.user.mgt.UserMgtConstants;
 import org.wso2.carbon.user.mgt.UserRealmProxy;
 import org.wso2.carbon.user.mgt.common.UserAdminException;
@@ -72,6 +73,7 @@ public class RestoreAction {
 
     private static final String SET_RES_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE CONCAT(rp.REG_PATH_VALUE, '/', rr.REG_NAME) = ?";
     private static final String SET_COLL_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE rp.REG_PATH_VALUE = ? AND rr.REG_NAME IS NULL";
+    protected static final Pattern VALID_HTRC_ID_REGEX = Pattern.compile("^\\w{2,4}\\.\\S{4,30}$");
 
     private final PrintWriter progressWriter;
     private final RegistryUtils registryUtils;
@@ -82,6 +84,10 @@ public class RestoreAction {
     private final UserRealmProxy userRealmProxy;
     private final DataSource dataSource;
     private final JAXBContext jaxbVolumesContext;
+    private final SystemUserRoleManager systemUserRoleManager;
+    private int numFilesRestored;
+    private int numMalformedWorksets;
+
 
     /**
      * Restore constructor
@@ -98,12 +104,14 @@ public class RestoreAction {
         RegistryContext registryContext = RegistryContext.getBaseInstance();
         this.dataSource = ((JDBCDataAccessManager) registryContext
             .getDataAccessManager()).getDataSource();
+        int tenantId = registryUtils.getTenantId();
 
         try {
             this.adminRegistry = registryUtils.getAdminRegistry();
             UserRealm userRealm = adminRegistry.getUserRealm();
             this.userRealmProxy = new UserRealmProxy(userRealm);
             this.userStoreManager = userRealm.getUserStoreManager();
+            this.systemUserRoleManager = new SystemUserRoleManager(dataSource, tenantId);
             this.authorizationManager = userRealm.getAuthorizationManager();
             this.jaxbVolumesContext = JAXBContext.newInstance(Volumes.class, Volume.class);
         } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
@@ -123,6 +131,9 @@ public class RestoreAction {
             throw new BackupRestoreException("Invalid backup directory (missing files dir)");
         }
 
+        numFilesRestored = 0;
+        numMalformedWorksets = 0;
+
         log("Loading backup file...");
         Backup backup = readBackup(backupDir);
 
@@ -132,19 +143,11 @@ public class RestoreAction {
         Map<String, String> roleMap = new HashMap<>();
         roleMap.put(backupMeta.getAdminRoleName().toLowerCase(), registryUtils.getAdminRole());
         roleMap.put(backupMeta.getEveryoneRole().getName().toLowerCase(), registryUtils.getEveryoneRole());
-
-        // needed to fix old WSO2 data
-        roleMap.put("everyone", registryUtils.getEveryoneRole());
-
-        Set<String> reservedRoleNames = new HashSet<>();
-        reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
-        reservedRoleNames.add(registryUtils.getEveryoneRole().toLowerCase());
-
-        Set<String> reservedUserNames = new HashSet<>();
-        reservedUserNames.add(registryUtils.getAdminUser().toLowerCase());
+        roleMap.put("everyone", registryUtils.getEveryoneRole()); // needed to fix old WSO2 data
 
         setEveryoneRolePermissions(backupMeta.getEveryoneRole());
 
+        Set<String> reservedRoleNames = getReservedRoleNames();
         for (Role role : backup.getRoles()) {
             if (reservedRoleNames.contains(role.getName().toLowerCase())) {
                 log("CONFLICT! Cannot restore reserved role name: %s", role.getName());
@@ -154,6 +157,7 @@ public class RestoreAction {
             createRole(role);
         }
 
+        Set<String> reservedUserNames = getReservedUserNames();
         for (User user : backup.getUsers()) {
             String userName = user.getName();
             if (reservedUserNames.contains(userName.toLowerCase())) {
@@ -184,6 +188,50 @@ public class RestoreAction {
             String worksetOwner = worksetMeta.getAuthor();
             log("Restoring workset '%s' of user '%s'", worksetName, worksetOwner);
             restoreWorkset(workset);
+        }
+
+        log("All done! Restored %,d roles, %,d users, %,d files, and %,d worksets "
+                + "(of which %,d were tagged as malformed)", backup.getRoles().size(),
+            backup.getUsers().size(), numFilesRestored, backup.getWorksets().size(),
+            numMalformedWorksets);
+    }
+
+    /**
+     * Retrieves the list of reserved user names
+     *
+     * @return The list of reserved user names
+     * @throws BackupRestoreException Thrown if an error occurs during the restore process
+     */
+    protected Set<String> getReservedUserNames() throws BackupRestoreException {
+        try {
+            Set<String> reservedUserNames = new HashSet<>();
+            reservedUserNames.add(registryUtils.getAdminUser().toLowerCase());
+            reservedUserNames.add("wso2.anonymous.user");
+            reservedUserNames.addAll(Arrays.asList(systemUserRoleManager.getSystemUsers()));
+
+            return reservedUserNames;
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            throw new BackupRestoreException("Cannot retrieve list of reserved user names", e);
+        }
+    }
+
+    /**
+     * Retrieves the list of reserved role names
+     *
+     * @return The list of reserved role names
+     * @throws BackupRestoreException Thrown if an error occurs during the restore process
+     */
+    protected Set<String> getReservedRoleNames() throws BackupRestoreException {
+        try {
+            Set<String> reservedRoleNames = new HashSet<>();
+            reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
+            reservedRoleNames.add(registryUtils.getEveryoneRole().toLowerCase());
+            reservedRoleNames.add("wso2.anonymous.role");
+            reservedRoleNames.addAll(Arrays.asList(systemUserRoleManager.getSystemRoles()));
+
+            return reservedRoleNames;
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            throw new BackupRestoreException("Cannot retrieve list of reserved role names", e);
         }
     }
 
@@ -285,39 +333,38 @@ public class RestoreAction {
             userStoreManager.addUser(userName, password, userRoles, userClaims, "default");
 
             if (createHome) {
-                String regUserHome = config.getUserHomePath(userName);
-                String regUserFiles = config.getUserFilesPath(userName);
-                String regUserWorksets = config.getUserWorksetsPath(userName);
-                String regUserJobs = config.getUserJobsPath(userName);
+                try {
+                    String regUserHome = config.getUserHomePath(userName);
+                    String regUserFiles = config.getUserFilesPath(userName);
+                    String regUserWorksets = config.getUserWorksetsPath(userName);
+                    String regUserJobs = config.getUserJobsPath(userName);
 
-                Collection userHomeCollection = adminRegistry.newCollection();
-                regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
+                    Collection userHomeCollection = adminRegistry.newCollection();
+                    regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
 
-                String homePermissions = String.format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
-                setResourceRolePermissions(regUserHome, homePermissions, null);
+                    String homePermissions = String
+                        .format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
+                    setResourceRolePermissions(regUserHome, homePermissions, null);
 
-                Collection filesCollection = adminRegistry.newCollection();
-                String extra = userName.endsWith("s") ? "'" : "'s";
-                filesCollection.setDescription(userName + extra + " file space");
-                regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
+                    Collection filesCollection = adminRegistry.newCollection();
+                    String extra = userName.endsWith("s") ? "'" : "'s";
+                    filesCollection.setDescription(userName + extra + " file space");
+                    regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
 
-                Collection worksetsCollection = adminRegistry.newCollection();
-                worksetsCollection.setDescription(userName + extra + " worksets");
-                regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
+                    Collection worksetsCollection = adminRegistry.newCollection();
+                    worksetsCollection.setDescription(userName + extra + " worksets");
+                    regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
 
-                Collection jobsCollection = adminRegistry.newCollection();
-                jobsCollection.setDescription(userName + extra + " jobs");
-                regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
+                    Collection jobsCollection = adminRegistry.newCollection();
+                    jobsCollection.setDescription(userName + extra + " jobs");
+                    regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
+                } catch (RegistryException e) {
+                    log("Error while creating home collection for user '%s' (Cause: %s)",
+                        userName, e.getMessage());
+                }
             }
-        } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException e) {
-            // TODO Find a better way to deal with invalid users
-            try {
-                log("Unable to create user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
-                userStoreManager.deleteUser(user.getName());
-                userStoreManager.deleteRole(user.getName());
-            } catch (Exception ignored) {
-                log("Problem removing user '%s' (Cause: %s)\n", user.getName(), ignored.getMessage());
-            }
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            log("Error while creating user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
             //throw new BackupRestoreException("Unable to create user: " + user.getName(), e);
         }
     }
@@ -470,6 +517,8 @@ public class RestoreAction {
                         setResourceMetadata(fullPath,
                             owner, file.getCreatedTime().getTime(),
                             file.getLastModifiedBy(), file.getLastModified().getTime());
+
+                        numFilesRestored++;
                     }
                 }
             }
@@ -619,19 +668,16 @@ public class RestoreAction {
             int volumeCount = 0;
 
             if (worksetContent != null) {
-                List<Volume> volumes = new Vector<>();
-                for (Volume volume : worksetContent.getVolumes()) {
-                    if (volume.getId().trim().isEmpty())
-                        continue;
+                List<Volume> volumes = worksetContent.getVolumes();
 
-                    Volume repairedVolume = new Volume();
-                    String id = volume.getId().split("\\s")[0];
-                    repairedVolume.setId(id);
-                    if (!volume.getProperties().isEmpty()) {
-                        repairedVolume.setProperties(volume.getProperties());
+                // check the volumes to make sure they contain not-obviously-invalid IDs
+                for (Volume volume : volumes) {
+                    String volumeId = volume.getId();
+                    if (!VALID_HTRC_ID_REGEX.matcher(volumeId).matches()) {
+                        worksetMeta.getTags().add("htrc::malformed");
+                        numMalformedWorksets++;
+                        break;
                     }
-
-                    volumes.add(repairedVolume);
                 }
 
                 volumeCount = volumes.size();
@@ -656,14 +702,6 @@ public class RestoreAction {
             setResourceMetadata(worksetPath,
                 author, worksetMeta.getCreated().getTime(),
                 worksetMeta.getLastModifiedBy(), worksetMeta.getLastModified().getTime());
-
-//            registry.rateResource(worksetPath, worksetMeta.getRating());
-//            for (Comment comment : worksetMeta.getComments()) {
-//                UserRegistry commentAuthorRegistry = registryUtils.getUserRegistry(comment.getAuthor());
-//                org.wso2.carbon.registry.core.Comment regComment =
-//                    new org.wso2.carbon.registry.core.Comment(comment.getText());
-//                commentAuthorRegistry.addComment(worksetPath, regComment);
-//            }
         } catch (RegistryException e) {
             throw new BackupRestoreException("Cannot create resource from workset", e);
         }

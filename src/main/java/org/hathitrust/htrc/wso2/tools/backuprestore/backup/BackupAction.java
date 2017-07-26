@@ -9,7 +9,6 @@ import edu.illinois.i3.htrc.registry.entities.backup.UserFiles;
 import edu.illinois.i3.htrc.registry.entities.security.Claim;
 import edu.illinois.i3.htrc.registry.entities.security.Role;
 import edu.illinois.i3.htrc.registry.entities.security.User;
-import edu.illinois.i3.htrc.registry.entities.workset.Comment;
 import edu.illinois.i3.htrc.registry.entities.workset.Volume;
 import edu.illinois.i3.htrc.registry.entities.workset.Volumes;
 import edu.illinois.i3.htrc.registry.entities.workset.Workset;
@@ -50,7 +49,6 @@ import org.hathitrust.htrc.wso2.tools.backuprestore.utils.Wso2Utils;
 import org.wso2.carbon.registry.core.ActionConstants;
 import org.wso2.carbon.registry.core.Collection;
 import org.wso2.carbon.registry.core.Resource;
-import org.wso2.carbon.registry.core.ResourcePath;
 import org.wso2.carbon.registry.core.Tag;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.secure.AuthorizationFailedException;
@@ -279,14 +277,11 @@ public class BackupAction {
      * Deserializes a Workset from a registry resource
      *
      * @param resource The registry resource
-     * @param userName The user name
      * @return The `Workset` instance
      * @throws RegistryException Thrown if an error occurs while accessing the registry
      */
-    protected Workset getWorksetFromResource(Resource resource, String userName)
-        throws RegistryException {
-        // TODO check if we still require the user name for retrieving the workset rating
-        WorksetMeta worksetMeta = getWorksetMetaFromResource(resource, userName);
+    protected Workset getWorksetFromResource(Resource resource) throws RegistryException {
+        WorksetMeta worksetMeta = getWorksetMetaFromResource(resource);
         WorksetContent worksetContent = getWorksetContentFromResource(resource);
 
         Workset workset = new Workset();
@@ -300,28 +295,18 @@ public class BackupAction {
      * Deserializes the workset metadata from a registry resource
      *
      * @param resource The registry resource
-     * @param userName The user name
      * @return The `WorksetMeta` instance
      * @throws RegistryException Thrown if an error occurs while accessing the registry
      */
-    protected WorksetMeta getWorksetMetaFromResource(Resource resource, String userName)
-        throws RegistryException {
+    protected WorksetMeta getWorksetMetaFromResource(Resource resource) throws RegistryException {
         String resPath = resource.getPath();
-        String[] versions = adminRegistry.getVersions(resPath);
         Tag[] tags = adminRegistry.getTags(resPath);
-        org.wso2.carbon.registry.core.Comment[] comments = adminRegistry.getComments(resPath);
         String name = resPath.substring(resPath.lastIndexOf("/") + 1);
-        Long version = versions.length > 0 ?
-            org.wso2.carbon.registry.core.utils.RegistryUtils
-                .getVersionedPath(new ResourcePath(versions[0])).getVersion() : null;
 
         WorksetMeta worksetMeta = new WorksetMeta();
         worksetMeta.setName(name);
         worksetMeta.setDescription(resource.getDescription());
         worksetMeta.setAuthor(resource.getAuthorUserName());
-        worksetMeta.setVersion(version);
-        worksetMeta.setRating(adminRegistry.getRating(resPath, userName));
-        worksetMeta.setAvgRating(adminRegistry.getAverageRating(resPath));
         String sVolCount = resource.getProperty(Constants.HTRC_PROP_VOLCOUNT);
         int volumeCount = (sVolCount != null) ? Integer.parseInt(sVolCount) : -1;
         worksetMeta.setVolumeCount(volumeCount);
@@ -355,23 +340,6 @@ public class BackupAction {
             resTags.add(tag.getTagName());
         }
 
-        List<Comment> resComments = worksetMeta.getComments();
-        for (org.wso2.carbon.registry.core.Comment comment : comments) {
-            Comment c = new Comment();
-            c.setAuthor(comment.getAuthorUserName());
-            c.setText(comment.getText());
-
-            Calendar cal = Calendar.getInstance();
-            cal.setTime(comment.getCreatedTime());
-            c.setCreated(cal);
-
-            cal = Calendar.getInstance();
-            cal.setTime(comment.getLastModified());
-            c.setLastModified(cal);
-
-            resComments.add(c);
-        }
-
         return worksetMeta;
     }
 
@@ -402,7 +370,7 @@ public class BackupAction {
                         continue;
                     }
 
-                    Workset workset = getWorksetFromResource(resource, userName);
+                    Workset workset = getWorksetFromResource(resource);
                     worksets.add(workset);
                 }
             }

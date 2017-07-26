@@ -4,21 +4,9 @@
     xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
     elementFormDefault="qualified">
 
-    <complexType name="Property">
-        <attribute name="name" type="string"/>
-        <attribute name="value" type="string"/>
-    </complexType>
-
-    <complexType name="Properties">
-        <sequence>
-            <element name="property" type="workset:Property" maxOccurs="unbounded"/>
-        </sequence>
-    </complexType>
-
     <complexType name="Volume">
         <sequence>
             <element name="id" type="string"/>
-            <element name="properties" type="workset:Properties" minOccurs="0"/>
         </sequence>
     </complexType>
 
