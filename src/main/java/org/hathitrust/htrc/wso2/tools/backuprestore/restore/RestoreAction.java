@@ -26,6 +26,7 @@ import java.io.Reader;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,6 +60,7 @@ import org.wso2.carbon.user.core.AuthorizationManager;
 import org.wso2.carbon.user.core.Permission;
 import org.wso2.carbon.user.core.UserRealm;
 import org.wso2.carbon.user.core.UserStoreManager;
+import org.wso2.carbon.user.core.system.SystemUserRoleManager;
 import org.wso2.carbon.user.mgt.UserMgtConstants;
 import org.wso2.carbon.user.mgt.UserRealmProxy;
 import org.wso2.carbon.user.mgt.common.UserAdminException;
@@ -82,6 +84,7 @@ public class RestoreAction {
     private final UserRealmProxy userRealmProxy;
     private final DataSource dataSource;
     private final JAXBContext jaxbVolumesContext;
+    private final SystemUserRoleManager systemUserRoleManager;
 
     /**
      * Restore constructor
@@ -98,12 +101,14 @@ public class RestoreAction {
         RegistryContext registryContext = RegistryContext.getBaseInstance();
         this.dataSource = ((JDBCDataAccessManager) registryContext
             .getDataAccessManager()).getDataSource();
+        int tenantId = registryUtils.getTenantId();
 
         try {
             this.adminRegistry = registryUtils.getAdminRegistry();
             UserRealm userRealm = adminRegistry.getUserRealm();
             this.userRealmProxy = new UserRealmProxy(userRealm);
             this.userStoreManager = userRealm.getUserStoreManager();
+            this.systemUserRoleManager = new SystemUserRoleManager(dataSource, tenantId);
             this.authorizationManager = userRealm.getAuthorizationManager();
             this.jaxbVolumesContext = JAXBContext.newInstance(Volumes.class, Volume.class);
         } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
@@ -132,19 +137,11 @@ public class RestoreAction {
         Map<String, String> roleMap = new HashMap<>();
         roleMap.put(backupMeta.getAdminRoleName().toLowerCase(), registryUtils.getAdminRole());
         roleMap.put(backupMeta.getEveryoneRole().getName().toLowerCase(), registryUtils.getEveryoneRole());
-
-        // needed to fix old WSO2 data
-        roleMap.put("everyone", registryUtils.getEveryoneRole());
-
-        Set<String> reservedRoleNames = new HashSet<>();
-        reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
-        reservedRoleNames.add(registryUtils.getEveryoneRole().toLowerCase());
-
-        Set<String> reservedUserNames = new HashSet<>();
-        reservedUserNames.add(registryUtils.getAdminUser().toLowerCase());
+        roleMap.put("everyone", registryUtils.getEveryoneRole()); // needed to fix old WSO2 data
 
         setEveryoneRolePermissions(backupMeta.getEveryoneRole());
 
+        Set<String> reservedRoleNames = getReservedRoleNames();
         for (Role role : backup.getRoles()) {
             if (reservedRoleNames.contains(role.getName().toLowerCase())) {
                 log("CONFLICT! Cannot restore reserved role name: %s", role.getName());
@@ -154,6 +151,7 @@ public class RestoreAction {
             createRole(role);
         }
 
+        Set<String> reservedUserNames = getReservedUserNames();
         for (User user : backup.getUsers()) {
             String userName = user.getName();
             if (reservedUserNames.contains(userName.toLowerCase())) {
@@ -184,6 +182,48 @@ public class RestoreAction {
             String worksetOwner = worksetMeta.getAuthor();
             log("Restoring workset '%s' of user '%s'", worksetName, worksetOwner);
             restoreWorkset(workset);
+        }
+
+        log("All done! Restored %,d roles, %,d users, and %,d worksets",
+            backup.getRoles().size(), backup.getUsers().size(), backup.getWorksets().size());
+    }
+
+    /**
+     * Retrieves the list of reserved user names
+     *
+     * @return The list of reserved user names
+     * @throws BackupRestoreException Thrown if an error occurs during the restore process
+     */
+    protected Set<String> getReservedUserNames() throws BackupRestoreException {
+        try {
+            Set<String> reservedUserNames = new HashSet<>();
+            reservedUserNames.add(registryUtils.getAdminUser().toLowerCase());
+            reservedUserNames.add("wso2.anonymous.user");
+            reservedUserNames.addAll(Arrays.asList(systemUserRoleManager.getSystemUsers()));
+
+            return reservedUserNames;
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            throw new BackupRestoreException("Cannot retrieve list of reserved user names", e);
+        }
+    }
+
+    /**
+     * Retrieves the list of reserved role names
+     *
+     * @return The list of reserved role names
+     * @throws BackupRestoreException Thrown if an error occurs during the restore process
+     */
+    protected Set<String> getReservedRoleNames() throws BackupRestoreException {
+        try {
+            Set<String> reservedRoleNames = new HashSet<>();
+            reservedRoleNames.add(registryUtils.getAdminRole().toLowerCase());
+            reservedRoleNames.add(registryUtils.getEveryoneRole().toLowerCase());
+            reservedRoleNames.add("wso2.anonymous.role");
+            reservedRoleNames.addAll(Arrays.asList(systemUserRoleManager.getSystemRoles()));
+
+            return reservedRoleNames;
+        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+            throw new BackupRestoreException("Cannot retrieve list of reserved role names", e);
         }
     }
 
