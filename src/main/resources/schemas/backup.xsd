@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schema xmlns="http://www.w3.org/2001/XMLSchema"
-    xmlns:backup="http://registry.htrc.i3.illinois.edu/entities/backup"
-    xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
-    xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
-    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/backup"
-    elementFormDefault="qualified">
+<schema xmlns:backup="http://registry.htrc.i3.illinois.edu/entities/backup"
+        xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
+        xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
+        xmlns="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="http://registry.htrc.i3.illinois.edu/entities/backup"
+        elementFormDefault="qualified">
 
     <import schemaLocation="security.xsd"
-        namespace="http://registry.htrc.i3.illinois.edu/entities/security"/>
+            namespace="http://registry.htrc.i3.illinois.edu/entities/security"/>
     <import schemaLocation="workset.xsd"
-        namespace="http://registry.htrc.i3.illinois.edu/entities/workset"/>
+            namespace="http://registry.htrc.i3.illinois.edu/entities/workset"/>
 
     <complexType name="BackupMeta">
         <all>
+            <element name="version" type="string"/>
             <element name="createdAt" type="dateTime"/>
             <element name="adminUserName" type="string"/>
             <element name="adminRoleName" type="string"/>

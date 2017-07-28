@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schema xmlns="http://www.w3.org/2001/XMLSchema"
-    xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
-    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/security"
-    elementFormDefault="qualified">
+<schema xmlns:security="http://registry.htrc.i3.illinois.edu/entities/security"
+        xmlns="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="http://registry.htrc.i3.illinois.edu/entities/security"
+        elementFormDefault="qualified">
 
     <include schemaLocation="claim.xsd"/>
-    <include schemaLocation="role.xsd"/>
 
     <complexType name="User">
         <sequence>
             <element name="name" type="string"/>
+            <element ref="security:claims"/>
             <element name="roles">
                 <complexType>
                     <sequence>
@@ -17,7 +17,7 @@
                     </sequence>
                 </complexType>
             </element>
-            <element ref="security:claims"/>
+            <element name="hasHome" type="boolean"/>
         </sequence>
     </complexType>
 

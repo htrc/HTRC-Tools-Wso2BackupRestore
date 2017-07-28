@@ -28,9 +28,10 @@ public class Wso2Utils {
      * Recurses a WSO2 permission tree and converts permissions to their string representation
      *
      * @param permissionNode The WSO2 permissions tree node to start at
-     * @param permissions The permission string accumulator
+     * @param permissions    The permission string accumulator
      */
-    private static void parsePermissions(UIPermissionNode permissionNode, List<String> permissions) {
+    private static void parsePermissions(UIPermissionNode permissionNode,
+                                         List<String> permissions) {
         if (permissionNode.isSelected()) {
             permissions.add(permissionNode.getResourcePath());
         }

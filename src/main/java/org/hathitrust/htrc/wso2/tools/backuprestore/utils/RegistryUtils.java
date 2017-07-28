@@ -26,7 +26,7 @@ public class RegistryUtils {
      * Constructor
      *
      * @param registryService The {@link RegistryService} instance
-     * @param realmService The {@link RealmService} instance
+     * @param realmService    The {@link RealmService} instance
      */
     public RegistryUtils(RegistryService registryService, RealmService realmService) {
         _registryService = registryService;
@@ -42,12 +42,12 @@ public class RegistryUtils {
      * Get a chrooted registry instance
      *
      * @param userName The user name
-     * @param chroot The root path
+     * @param chroot   The root path
      * @return The {@link UserRegistry} instance
      * @throws RegistryException Thrown if a registry error occurs
      */
     public UserRegistry getChrootUserRegistry(String userName, String chroot)
-            throws RegistryException {
+        throws RegistryException {
         return _registryService.getRegistry(userName, _tenantId, chroot);
     }
 
@@ -75,57 +75,119 @@ public class RegistryUtils {
     /**
      * Authorize access to a resource for all users
      *
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
      * @param permissions The permissions to authorize
-     * @throws RegistryException Thrown if a registry error occurs
+     * @throws RegistryException  Thrown if a registry error occurs
      * @throws UserStoreException Thrown if a user store error occurs
      */
     public void authorizeEveryone(String resPath, UserRegistry registry,
-            String... permissions) throws RegistryException, UserStoreException {
+                                  String... permissions)
+        throws RegistryException, UserStoreException {
         authorizeRole(_everyoneRole, resPath, registry, permissions);
+    }
+
+    /**
+     * Authorize access to a resource for particular role
+     *
+     * @param roleName    The role
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
+     * @param permissions The permissions to authorize
+     * @throws RegistryException  Thrown if a registry error occurs
+     * @throws UserStoreException Thrown if a user store error occurs
+     */
+    public void authorizeRole(String roleName, String resPath, UserRegistry registry,
+                              String... permissions) throws RegistryException, UserStoreException {
+        UserRealm userRealm = registry.getUserRealm();
+        AuthorizationManager authManager = userRealm.getAuthorizationManager();
+
+        for (String permission : permissions) {
+            authManager.authorizeRole(roleName, resPath, permission);
+        }
     }
 
     /**
      * Deny access to a resource for all users
      *
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
      * @param permissions The permissions to deny
-     * @throws RegistryException Thrown if a registry error occurs
+     * @throws RegistryException  Thrown if a registry error occurs
      * @throws UserStoreException Thrown if a user store error occurs
      */
     public void denyEveryone(String resPath, UserRegistry registry, String... permissions)
-            throws RegistryException, UserStoreException {
+        throws RegistryException, UserStoreException {
         denyRole(_everyoneRole, resPath, registry, permissions);
+    }
+
+    /**
+     * Deny access to a resource for a particular role
+     *
+     * @param roleName    The role
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
+     * @param permissions The permissions to deny
+     * @throws RegistryException  Thrown if a registry error occurs
+     * @throws UserStoreException Thrown if a user store error occurs
+     */
+    public void denyRole(String roleName, String resPath, UserRegistry registry,
+                         String... permissions) throws RegistryException, UserStoreException {
+        UserRealm userRealm = registry.getUserRealm();
+        AuthorizationManager authManager = userRealm.getAuthorizationManager();
+
+        for (String permission : permissions) {
+            authManager.denyRole(roleName, resPath, permission);
+        }
     }
 
     /**
      * Clear public permissions to a resource (set permissions as inherited from parent)
      *
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
      * @param permissions The permissions to clear
-     * @throws RegistryException Thrown if a registry error occurs
+     * @throws RegistryException  Thrown if a registry error occurs
      * @throws UserStoreException Thrown if a user store error occurs
      */
     public void clearEveryone(String resPath, UserRegistry registry, String... permissions)
-            throws RegistryException, UserStoreException {
+        throws RegistryException, UserStoreException {
         clearRole(_everyoneRole, resPath, registry, permissions);
+    }
+
+    /**
+     * Clear role permissions to a resource (set permissions as inherited from parent)
+     *
+     * @param roleName    The role
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
+     * @param permissions The permissions to clear
+     * @throws RegistryException  Thrown if a registry error occurs
+     * @throws UserStoreException Thrown if a user store error occurs
+     */
+    public void clearRole(String roleName, String resPath, UserRegistry registry,
+                          String... permissions) throws RegistryException, UserStoreException {
+        UserRealm userRealm = registry.getUserRealm();
+        AuthorizationManager authManager = userRealm.getAuthorizationManager();
+
+        for (String permission : permissions) {
+            authManager.clearRoleAuthorization(roleName, resPath, permission);
+        }
     }
 
     /**
      * Checks whether the resource has the specified public permissions
      *
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
      * @param permissions The permissions to check
      * @return True if the resource has the specified public permissions, False otherwise
-     * @throws RegistryException Thrown if a registry error occurs
+     * @throws RegistryException  Thrown if a registry error occurs
      * @throws UserStoreException Thrown if a user store error occurs
      */
     public boolean isEveryoneAuthorized(String resPath, UserRegistry registry,
-            String... permissions) throws RegistryException, UserStoreException {
+                                        String... permissions)
+        throws RegistryException, UserStoreException {
         UserRealm userRealm = registry.getUserRealm();
         AuthorizationManager authManager = userRealm.getAuthorizationManager();
 
@@ -139,77 +201,17 @@ public class RegistryUtils {
     }
 
     /**
-     * Authorize access to a resource for particular role
-     *
-     * @param roleName The role
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
-     * @param permissions The permissions to authorize
-     * @throws RegistryException Thrown if a registry error occurs
-     * @throws UserStoreException Thrown if a user store error occurs
-     */
-    public void authorizeRole(String roleName, String resPath, UserRegistry registry,
-            String... permissions) throws RegistryException, UserStoreException {
-        UserRealm userRealm = registry.getUserRealm();
-        AuthorizationManager authManager = userRealm.getAuthorizationManager();
-
-        for (String permission : permissions) {
-            authManager.authorizeRole(roleName, resPath, permission);
-        }
-    }
-
-    /**
-     * Deny access to a resource for a particular role
-     *
-     * @param roleName The role
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
-     * @param permissions The permissions to deny
-     * @throws RegistryException Thrown if a registry error occurs
-     * @throws UserStoreException Thrown if a user store error occurs
-     */
-    public void denyRole(String roleName, String resPath, UserRegistry registry,
-            String... permissions) throws RegistryException, UserStoreException {
-        UserRealm userRealm = registry.getUserRealm();
-        AuthorizationManager authManager = userRealm.getAuthorizationManager();
-
-        for (String permission : permissions) {
-            authManager.denyRole(roleName, resPath, permission);
-        }
-    }
-
-    /**
-     * Clear role permissions to a resource (set permissions as inherited from parent)
-     *
-     * @param roleName The role
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
-     * @param permissions The permissions to clear
-     * @throws RegistryException Thrown if a registry error occurs
-     * @throws UserStoreException Thrown if a user store error occurs
-     */
-    public void clearRole(String roleName, String resPath, UserRegistry registry,
-            String... permissions) throws RegistryException, UserStoreException {
-        UserRealm userRealm = registry.getUserRealm();
-        AuthorizationManager authManager = userRealm.getAuthorizationManager();
-
-        for (String permission : permissions) {
-            authManager.clearRoleAuthorization(roleName, resPath, permission);
-        }
-    }
-
-    /**
      * Verify whether access is granted to a registry resource for the given permissions
      *
-     * @param resPath The resource path
-     * @param registry The {@link UserRegistry} instance
+     * @param resPath     The resource path
+     * @param registry    The {@link UserRegistry} instance
      * @param permissions The permissions to check
      * @return True if authorized, False otherwise
-     * @throws RegistryException Thrown if a registry error occurs
+     * @throws RegistryException  Thrown if a registry error occurs
      * @throws UserStoreException Thrown if a user store error occurs
      */
     public boolean isAuthorized(String resPath, UserRegistry registry, String... permissions)
-            throws RegistryException, UserStoreException {
+        throws RegistryException, UserStoreException {
         UserRealm userRealm = registry.getUserRealm();
         AuthorizationManager authManager = userRealm.getAuthorizationManager();
 

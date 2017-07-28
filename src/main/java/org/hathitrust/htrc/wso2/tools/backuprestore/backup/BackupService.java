@@ -33,8 +33,10 @@ public class BackupService extends HttpServlet {
 
         File backupDir = new File(backupPath);
         if (backupDir.exists()) {
-            resp.sendError(HttpStatus.SC_BAD_REQUEST,
-                "Backup folder already exists: " + backupPath + " - won't overwrite!");
+            resp.sendError(
+                HttpStatus.SC_BAD_REQUEST,
+                "Backup folder already exists: " + backupPath + " - won't overwrite!"
+            );
             return;
         }
         backupDir.mkdirs();
@@ -47,7 +49,8 @@ public class BackupService extends HttpServlet {
         try {
             BackupAction backupAction = new BackupAction(backupRestore, progressWriter);
             backupAction.backup(backupDir);
-        } catch (BackupRestoreException e) {
+        }
+        catch (BackupRestoreException e) {
             e.printStackTrace(progressWriter);
             progressWriter.flush();
             resp.setStatus(HttpStatus.SC_METHOD_FAILURE);

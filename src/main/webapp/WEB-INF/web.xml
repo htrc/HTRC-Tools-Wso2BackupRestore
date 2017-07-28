@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns="http://java.sun.com/xml/ns/javaee"
-    xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
-    version="2.5">
+         xmlns="http://java.sun.com/xml/ns/javaee"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+         version="2.5">
 
     <display-name>WSO2 Backup Restore ${git.commit.id.describe}</display-name>
 
@@ -13,14 +13,16 @@
     <servlet>
         <description>WSO2 Backup Service API</description>
         <servlet-name>BackupService</servlet-name>
-        <servlet-class>org.hathitrust.htrc.wso2.tools.backuprestore.backup.BackupService</servlet-class>
+        <servlet-class>org.hathitrust.htrc.wso2.tools.backuprestore.backup.BackupService
+        </servlet-class>
         <load-on-startup>1</load-on-startup>
     </servlet>
 
     <servlet>
         <description>WSO2 Restore Service API</description>
         <servlet-name>RestoreService</servlet-name>
-        <servlet-class>org.hathitrust.htrc.wso2.tools.backuprestore.restore.RestoreService</servlet-class>
+        <servlet-class>org.hathitrust.htrc.wso2.tools.backuprestore.restore.RestoreService
+        </servlet-class>
         <load-on-startup>1</load-on-startup>
     </servlet>
 
