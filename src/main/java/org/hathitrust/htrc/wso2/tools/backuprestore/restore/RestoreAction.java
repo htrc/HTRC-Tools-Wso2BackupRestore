@@ -383,8 +383,9 @@ public class RestoreAction {
             }
 
             String password = userName + "54321";
+            String[] userRole = {userName};
 
-            userStoreManager.addUser(userName, password, null, userClaims, "default");
+            userStoreManager.addUser(userName, password, userRole, userClaims, "default");
 
             if (user.isHasHome()) {
                 // need to have roles created before a user home can be created
