@@ -71,10 +71,9 @@ import org.wso2.carbon.user.mgt.common.UserAdminException;
  */
 public class RestoreAction {
 
+    protected static final Pattern VALID_HTRC_ID_REGEX = Pattern.compile("^\\w{2,4}\\.\\S{4,30}$");
     private static final String SET_RES_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE CONCAT(rp.REG_PATH_VALUE, '/', rr.REG_NAME) = ?";
     private static final String SET_COLL_META_SQL = "UPDATE REG_PATH rp JOIN REG_RESOURCE rr USING (REG_PATH_ID) SET rr.REG_CREATOR = ?, rr.REG_CREATED_TIME = ?, rr.REG_LAST_UPDATOR = ?, rr.REG_LAST_UPDATED_TIME = ? WHERE rp.REG_PATH_VALUE = ? AND rr.REG_NAME IS NULL";
-    protected static final Pattern VALID_HTRC_ID_REGEX = Pattern.compile("^\\w{2,4}\\.\\S{4,30}$");
-
     private final PrintWriter progressWriter;
     private final RegistryUtils registryUtils;
     private final RegistryExtensionConfig config;
@@ -88,11 +87,10 @@ public class RestoreAction {
     private int numFilesRestored;
     private int numMalformedWorksets;
 
-
     /**
      * Restore constructor
      *
-     * @param backupRestore Instance holding configuration and other useful references
+     * @param backupRestore  Instance holding configuration and other useful references
      * @param progressWriter The writer where progress information is written to
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
@@ -114,7 +112,8 @@ public class RestoreAction {
             this.systemUserRoleManager = new SystemUserRoleManager(dataSource, tenantId);
             this.authorizationManager = userRealm.getAuthorizationManager();
             this.jaxbVolumesContext = JAXBContext.newInstance(Volumes.class, Volume.class);
-        } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
             throw new BackupRestoreException("Could not initialize the restore function", e);
         }
     }
@@ -140,9 +139,20 @@ public class RestoreAction {
         BackupMeta backupMeta = backup.getMetadata();
         log("Backup created on %s loaded...", backupMeta.getCreatedAt().getTime());
 
+        if (!Constants.BACKUP_VERSION.equalsIgnoreCase(backupMeta.getVersion())) {
+            throw new BackupRestoreException(
+                String.format("Incompatible backup version! Found: %s  Required: %s",
+                              backupMeta.getVersion(), Constants.BACKUP_VERSION
+                )
+            );
+        }
+
         Map<String, String> roleMap = new HashMap<>();
         roleMap.put(backupMeta.getAdminRoleName().toLowerCase(), registryUtils.getAdminRole());
-        roleMap.put(backupMeta.getEveryoneRole().getName().toLowerCase(), registryUtils.getEveryoneRole());
+        roleMap.put(
+            backupMeta.getEveryoneRole().getName().toLowerCase(),
+            registryUtils.getEveryoneRole()
+        );
         roleMap.put("everyone", registryUtils.getEveryoneRole()); // needed to fix old WSO2 data
 
         setEveryoneRolePermissions(backupMeta.getEveryoneRole());
@@ -165,7 +175,7 @@ public class RestoreAction {
                 continue;
             }
             log("Creating user '%s'...", userName);
-            createUser(user, true);
+            createUser(user);
         }
 
         for (UserFiles userFiles : backup.getUserFilespace()) {
@@ -193,7 +203,48 @@ public class RestoreAction {
         log("All done! Restored %,d roles, %,d users, %,d files, and %,d worksets "
                 + "(of which %,d were tagged as malformed)", backup.getRoles().size(),
             backup.getUsers().size(), numFilesRestored, backup.getWorksets().size(),
-            numMalformedWorksets);
+            numMalformedWorksets
+        );
+    }
+
+    /**
+     * Creates the home space of a user
+     *
+     * @param userName The user name
+     * @throws BackupRestoreException Thrown if an error occurs during the restore process
+     */
+    protected void createUserHome(String userName) throws BackupRestoreException {
+        try {
+            String regUserHome = config.getUserHomePath(userName);
+            String regUserFiles = config.getUserFilesPath(userName);
+            String regUserWorksets = config.getUserWorksetsPath(userName);
+            String regUserJobs = config.getUserJobsPath(userName);
+
+            Collection userHomeCollection = adminRegistry.newCollection();
+            regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
+
+            String homePermissions = String
+                .format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
+            setResourceRolePermissions(regUserHome, homePermissions, null);
+
+            Collection filesCollection = adminRegistry.newCollection();
+            String extra = userName.endsWith("s") ? "'" : "'s";
+            filesCollection.setDescription(userName + extra + " file space");
+            regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
+
+            Collection worksetsCollection = adminRegistry.newCollection();
+            worksetsCollection.setDescription(userName + extra + " worksets");
+            regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
+
+            Collection jobsCollection = adminRegistry.newCollection();
+            jobsCollection.setDescription(userName + extra + " jobs");
+            regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
+        }
+        catch (RegistryException e) {
+            log("Error while creating home collection for user '%s' (Cause: %s)",
+                userName, e.getMessage()
+            );
+        }
     }
 
     /**
@@ -210,7 +261,8 @@ public class RestoreAction {
             reservedUserNames.addAll(Arrays.asList(systemUserRoleManager.getSystemUsers()));
 
             return reservedUserNames;
-        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException e) {
             throw new BackupRestoreException("Cannot retrieve list of reserved user names", e);
         }
     }
@@ -230,7 +282,8 @@ public class RestoreAction {
             reservedRoleNames.addAll(Arrays.asList(systemUserRoleManager.getSystemRoles()));
 
             return reservedRoleNames;
-        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException e) {
             throw new BackupRestoreException("Cannot retrieve list of reserved role names", e);
         }
     }
@@ -238,7 +291,7 @@ public class RestoreAction {
     /**
      * Logs a message to the progress log
      *
-     * @param format The message format
+     * @param format  The message format
      * @param objects The optional message context
      */
     protected void log(String format, Object... objects) {
@@ -265,7 +318,8 @@ public class RestoreAction {
             }
 
             return backup;
-        } catch (JAXBException | IOException e) {
+        }
+        catch (JAXBException | IOException e) {
             throw new BackupRestoreException("Unable to parse backup file", e);
         }
     }
@@ -276,14 +330,16 @@ public class RestoreAction {
      * @param backupEveryoneRole The permissions from the backup
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void setEveryoneRolePermissions(Role backupEveryoneRole) throws BackupRestoreException {
+    protected void setEveryoneRolePermissions(Role backupEveryoneRole)
+        throws BackupRestoreException {
         String everyoneRoleName = registryUtils.getEveryoneRole();
         try {
             String[] permissions = backupEveryoneRole.getPermissions().toArray(new String[0]);
             userRealmProxy.setRoleUIPermission(everyoneRoleName, permissions);
-        } catch (UserAdminException e) {
+        }
+        catch (UserAdminException e) {
             throw new BackupRestoreException("Error setting role permissions for role: "
-                + everyoneRoleName);
+                                                 + everyoneRoleName);
         }
     }
 
@@ -303,7 +359,8 @@ public class RestoreAction {
             }
 
             userStoreManager.addRole(role.getName(), null, permissions);
-        } catch (UserStoreException e) {
+        }
+        catch (UserStoreException e) {
             throw new BackupRestoreException("Unable to create role: " + role.getName(), e);
         }
     }
@@ -312,58 +369,29 @@ public class RestoreAction {
      * Creates a WSO2 user
      *
      * @param user The user
-     * @param createHome True to create the home collection, False otherwise
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void createUser(User user, boolean createHome) throws BackupRestoreException {
+    protected void createUser(User user) throws BackupRestoreException {
         try {
             String userName = user.getName();
 
             Map<String, String> userClaims = new HashMap<>();
             for (Claim claim : user.getClaims()) {
-                if (!claim.getUri().startsWith("http://wso2.org/claims/"))
-                    continue;
+                if (!claim.getUri().startsWith("http://wso2.org/claims/")) { continue; }
 
                 userClaims.put(claim.getUri(), claim.getValue());
             }
 
-            String[] userRoles = user.getRoles().toArray(new String[0]);
             String password = userName + "54321";
 
-            userStoreManager.addUser(userName, password, userRoles, userClaims, "default");
+            userStoreManager.addUser(userName, password, null, userClaims, "default");
 
-            if (createHome) {
-                try {
-                    String regUserHome = config.getUserHomePath(userName);
-                    String regUserFiles = config.getUserFilesPath(userName);
-                    String regUserWorksets = config.getUserWorksetsPath(userName);
-                    String regUserJobs = config.getUserJobsPath(userName);
-
-                    Collection userHomeCollection = adminRegistry.newCollection();
-                    regUserHome = adminRegistry.put(regUserHome, userHomeCollection);
-
-                    String homePermissions = String
-                        .format("%s:GDPA|%s:gdpa", userName, registryUtils.getEveryoneRole());
-                    setResourceRolePermissions(regUserHome, homePermissions, null);
-
-                    Collection filesCollection = adminRegistry.newCollection();
-                    String extra = userName.endsWith("s") ? "'" : "'s";
-                    filesCollection.setDescription(userName + extra + " file space");
-                    regUserFiles = adminRegistry.put(regUserFiles, filesCollection);
-
-                    Collection worksetsCollection = adminRegistry.newCollection();
-                    worksetsCollection.setDescription(userName + extra + " worksets");
-                    regUserWorksets = adminRegistry.put(regUserWorksets, worksetsCollection);
-
-                    Collection jobsCollection = adminRegistry.newCollection();
-                    jobsCollection.setDescription(userName + extra + " jobs");
-                    regUserJobs = adminRegistry.put(regUserJobs, jobsCollection);
-                } catch (RegistryException e) {
-                    log("Error while creating home collection for user '%s' (Cause: %s)",
-                        userName, e.getMessage());
-                }
+            if (user.isHasHome()) {
+                // need to have roles created before a user home can be created
+                createUserHome(userName);
             }
-        } catch (org.wso2.carbon.user.core.UserStoreException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException e) {
             log("Error while creating user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
             //throw new BackupRestoreException("Unable to create user: " + user.getName(), e);
         }
@@ -372,12 +400,13 @@ public class RestoreAction {
     /**
      * Sets the role permissions for a registry resource
      *
-     * @param resPath The resource path
+     * @param resPath     The resource path
      * @param permissions The (encoded) permissions to set
-     * @param roleMap The optional mapping from external role names to local role names (can be null)
+     * @param roleMap     The optional mapping from external role names to local role names (can be null)
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void setResourceRolePermissions(String resPath, String permissions, Map<String, String> roleMap)
+    protected void setResourceRolePermissions(String resPath, String permissions,
+                                              Map<String, String> roleMap)
         throws BackupRestoreException {
         try {
             Resource resource = adminRegistry.get(resPath);
@@ -397,19 +426,23 @@ public class RestoreAction {
                 for (char c : perms.toCharArray()) {
                     switch (c) {
                         case 'G':
-                            authorizationManager.authorizeRole(roleName, resId, ActionConstants.GET);
+                            authorizationManager
+                                .authorizeRole(roleName, resId, ActionConstants.GET);
                             break;
 
                         case 'D':
-                            authorizationManager.authorizeRole(roleName, resId, ActionConstants.DELETE);
+                            authorizationManager
+                                .authorizeRole(roleName, resId, ActionConstants.DELETE);
                             break;
 
                         case 'P':
-                            authorizationManager.authorizeRole(roleName, resId, ActionConstants.PUT);
+                            authorizationManager
+                                .authorizeRole(roleName, resId, ActionConstants.PUT);
                             break;
 
                         case 'A':
-                            authorizationManager.authorizeRole(roleName, resId, AccessControlConstants.AUTHORIZE);
+                            authorizationManager
+                                .authorizeRole(roleName, resId, AccessControlConstants.AUTHORIZE);
                             break;
 
                         case 'g':
@@ -425,7 +458,8 @@ public class RestoreAction {
                             break;
 
                         case 'a':
-                            authorizationManager.denyRole(roleName, resId, AccessControlConstants.AUTHORIZE);
+                            authorizationManager
+                                .denyRole(roleName, resId, AccessControlConstants.AUTHORIZE);
                             break;
 
                         default:
@@ -433,7 +467,8 @@ public class RestoreAction {
                     }
                 }
             }
-        } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException | RegistryException e) {
             throw new BackupRestoreException("Error setting permissions for: " + resPath, e);
         }
     }
@@ -441,13 +476,14 @@ public class RestoreAction {
     /**
      * Restores a set of files
      *
-     * @param files The file references to restore
+     * @param files    The file references to restore
      * @param rootPath The relative path to restore against
      * @param filesDir The location of the file backup data on disk
-     * @param roleMap The optional mapping from external role names to local role names (can be null)
+     * @param roleMap  The optional mapping from external role names to local role names (can be null)
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void restoreFiles(List<RegFile> files, String rootPath, File filesDir, Map<String, String> roleMap)
+    protected void restoreFiles(List<RegFile> files, String rootPath, File filesDir,
+                                Map<String, String> roleMap)
         throws BackupRestoreException {
         try {
             for (RegFile file : files) {
@@ -466,12 +502,17 @@ public class RestoreAction {
                     userRegistry.createLink(fullPath, targetPath);
                     if (file.getContentType().equals("collection")) {
                         setCollectionMetadata(fullPath,
-                            owner, file.getCreatedTime().getTime(),
-                            file.getLastModifiedBy(), file.getLastModified().getTime());
-                    } else {
+                                              owner, file.getCreatedTime().getTime(),
+                                              file.getLastModifiedBy(),
+                                              file.getLastModified().getTime()
+                        );
+                    }
+                    else {
                         setResourceMetadata(fullPath,
-                            owner, file.getCreatedTime().getTime(),
-                            file.getLastModifiedBy(), file.getLastModified().getTime());
+                                            owner, file.getCreatedTime().getTime(),
+                                            file.getLastModifiedBy(),
+                                            file.getLastModified().getTime()
+                        );
                     }
                     continue;
                 }
@@ -481,48 +522,55 @@ public class RestoreAction {
                     Collection collection = adminRegistry.newCollection();
                     collection.setDescription(description);
                     for (ResProperty p : file.getProperties()) {
-                        if (p.getKey().startsWith("registry."))
-                            continue;
+                        if (p.getKey().startsWith("registry.")) { continue; }
                         collection.setProperty(p.getKey(), p.getValue());
                     }
                     fullPath = adminRegistry.put(fullPath, collection);
                     setResourceRolePermissions(fullPath, file.getPermissions(), roleMap);
                     setCollectionMetadata(fullPath,
-                        owner, file.getCreatedTime().getTime(),
-                        file.getLastModifiedBy(), file.getLastModified().getTime());
+                                          owner, file.getCreatedTime().getTime(),
+                                          file.getLastModifiedBy(), file.getLastModified().getTime()
+                    );
                     restoreFiles(file.getRegFiles(), rootPath, filesDir, roleMap);
-                } else {
+                }
+                else {
                     String checksum = file.getChecksum();
                     File resFile = new File(filesDir, checksum);
                     if (!resFile.exists()) {
-                        throw new BackupRestoreException("Missing checksum file: " + checksum,
-                            new FileNotFoundException(resFile.toString()));
-                    } else {
+                        throw new BackupRestoreException(
+                            "Missing checksum file: " + checksum,
+                            new FileNotFoundException(resFile.toString())
+                        );
+                    }
+                    else {
                         Resource res = adminRegistry.newResource();
                         try {
                             res.setContentStream(new FileInputStream(resFile));
-                        } catch (FileNotFoundException ignored) {
+                        }
+                        catch (FileNotFoundException ignored) {
                         }
 
                         res.setDescription(description);
                         res.setMediaType(file.getContentType());
                         for (ResProperty p : file.getProperties()) {
-                            if (p.getKey().startsWith("registry."))
-                                continue;
+                            if (p.getKey().startsWith("registry.")) { continue; }
                             res.setProperty(p.getKey(), p.getValue());
                         }
 
                         fullPath = adminRegistry.put(fullPath, res);
                         setResourceRolePermissions(fullPath, file.getPermissions(), roleMap);
                         setResourceMetadata(fullPath,
-                            owner, file.getCreatedTime().getTime(),
-                            file.getLastModifiedBy(), file.getLastModified().getTime());
+                                            owner, file.getCreatedTime().getTime(),
+                                            file.getLastModifiedBy(),
+                                            file.getLastModified().getTime()
+                        );
 
                         numFilesRestored++;
                     }
                 }
             }
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Could not restore file(s)", e);
         }
     }
@@ -534,7 +582,8 @@ public class RestoreAction {
      */
     protected void createPublicFilespace() throws BackupRestoreException {
         try {
-            String allowEveryonePermissions = String.format("%s:GDPa", registryUtils.getEveryoneRole());
+            String allowEveryonePermissions = String
+                .format("%s:GDPa", registryUtils.getEveryoneRole());
 
             Collection publicCollection = adminRegistry.newCollection();
             String publicPath = adminRegistry.put(config.getPublicPath(), publicCollection);
@@ -542,7 +591,8 @@ public class RestoreAction {
 
             Collection publicFilesCollection = adminRegistry.newCollection();
             publicFilesCollection.setDescription("Public files");
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Cannot create public space", e);
         }
     }
@@ -550,14 +600,15 @@ public class RestoreAction {
     /**
      * Sets the owner, created date, last updater, last updated date attributes for a collection
      *
-     * @param collPath The collection path
-     * @param owner The owner
-     * @param createdDate The created date
-     * @param updater The updater
+     * @param collPath       The collection path
+     * @param owner          The owner
+     * @param createdDate    The created date
+     * @param updater        The updater
      * @param lastUpdateDate The last updated date
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void setCollectionMetadata(String collPath, String owner, Date createdDate, String updater, Date lastUpdateDate)
+    protected void setCollectionMetadata(String collPath, String owner, Date createdDate,
+                                         String updater, Date lastUpdateDate)
         throws BackupRestoreException {
         try (Connection conn = dataSource.getConnection()) {
             PreparedStatement stmt = conn.prepareStatement(SET_COLL_META_SQL);
@@ -570,25 +621,29 @@ public class RestoreAction {
             int updated = stmt.executeUpdate();
             if (updated != 1) {
                 throw new BackupRestoreException(
-                    "Unexpected SQL response: setCollectionMetadata.updated=" + updated + " for " + collPath);
+                    "Unexpected SQL response: setCollectionMetadata.updated=" + updated + " for "
+                        + collPath);
             }
             conn.commit();
-        } catch (SQLException e) {
-            throw new BackupRestoreException("Cannot update collection metadata for: " + collPath, e);
+        }
+        catch (SQLException e) {
+            throw new BackupRestoreException(
+                "Cannot update collection metadata for: " + collPath, e);
         }
     }
 
     /**
      * Sets the owner, created date, last updater, last updated date attributes for a resource
      *
-     * @param resPath The resource path
-     * @param owner The owner
-     * @param createdDate The created date
-     * @param updater The updater
+     * @param resPath        The resource path
+     * @param owner          The owner
+     * @param createdDate    The created date
+     * @param updater        The updater
      * @param lastUpdateDate The last updated date
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
-    protected void setResourceMetadata(String resPath, String owner, Date createdDate, String updater, Date lastUpdateDate)
+    protected void setResourceMetadata(String resPath, String owner, Date createdDate,
+                                       String updater, Date lastUpdateDate)
         throws BackupRestoreException {
         try (Connection conn = dataSource.getConnection()) {
             PreparedStatement stmt = conn.prepareStatement(SET_RES_META_SQL);
@@ -601,10 +656,12 @@ public class RestoreAction {
             int updated = stmt.executeUpdate();
             if (updated != 1) {
                 throw new BackupRestoreException(
-                    "Unexpected SQL response: setResourceMetadata.updated=" + updated + " for " + resPath);
+                    "Unexpected SQL response: setResourceMetadata.updated=" + updated + " for "
+                        + resPath);
             }
             conn.commit();
-        } catch (SQLException e) {
+        }
+        catch (SQLException e) {
             throw new BackupRestoreException("Cannot update resource metadata for: " + resPath, e);
         }
     }
@@ -622,7 +679,8 @@ public class RestoreAction {
             marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
 
             return marshaller;
-        } catch (JAXBException e) {
+        }
+        catch (JAXBException e) {
             throw new BackupRestoreException("Cannot create volumes marshaller", e);
         }
     }
@@ -643,7 +701,8 @@ public class RestoreAction {
             createVolumesMarshaller().marshal(volumes, baos);
 
             return new ByteArrayInputStream(baos.toByteArray());
-        } catch (JAXBException e) {
+        }
+        catch (JAXBException e) {
             throw new BackupRestoreException("Cannot marshal volumes", e);
         }
     }
@@ -695,14 +754,18 @@ public class RestoreAction {
             }
 
             if (worksetMeta.isPublic()) {
-                String allowEveryoneReadPermissions = String.format("%s:Gdpa", registryUtils.getEveryoneRole());
+                String allowEveryoneReadPermissions = String
+                    .format("%s:Gdpa", registryUtils.getEveryoneRole());
                 setResourceRolePermissions(worksetPath, allowEveryoneReadPermissions, null);
             }
 
             setResourceMetadata(worksetPath,
-                author, worksetMeta.getCreated().getTime(),
-                worksetMeta.getLastModifiedBy(), worksetMeta.getLastModified().getTime());
-        } catch (RegistryException e) {
+                                author, worksetMeta.getCreated().getTime(),
+                                worksetMeta.getLastModifiedBy(),
+                                worksetMeta.getLastModified().getTime()
+            );
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Cannot create resource from workset", e);
         }
     }

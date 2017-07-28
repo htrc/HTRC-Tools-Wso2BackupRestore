@@ -41,7 +41,8 @@ public class BackupRestore implements ServletContextListener {
             Config htrcConfig;
             try {
                 htrcConfig = config.getConfig(Constants.HTRC_CONFIG_PARAM);
-            } catch (ConfigException.Missing e) {
+            }
+            catch (ConfigException.Missing e) {
                 throw new ConfigurationException(
                     "Missing configuration section: " + Constants.HTRC_CONFIG_PARAM);
             }
@@ -61,7 +62,8 @@ public class BackupRestore implements ServletContextListener {
             context.setAttribute(this.getClass().getName(), this);
 
             log.info(webappName + " successfully initialized");
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             log.error("Error initializing " + webappName, e);
             throw new RuntimeException(e);
         }
@@ -69,25 +71,6 @@ public class BackupRestore implements ServletContextListener {
 
     @Override
     public void contextDestroyed(ServletContextEvent servletContextEvent) {
-    }
-
-    /**
-     * Return the {@link RegistryUtils} instance used to access helper Registry functionality
-     *
-     * @return The {@link RegistryUtils} instance
-     */
-    public RegistryUtils getRegistryUtils() {
-        return _registryUtils;
-    }
-
-    /**
-     * Return the {@link RegistryExtensionConfig} instance used to access the Registry Extension
-     * configuration settings
-     *
-     * @return The {@link RegistryExtensionConfig} instance
-     */
-    public RegistryExtensionConfig getConfig() {
-        return _config;
     }
 
     /**
@@ -111,5 +94,24 @@ public class BackupRestore implements ServletContextListener {
         log.info("Loading WSO2 Backup Restore configuration from " + htrcConfig);
 
         return ConfigFactory.parseURL(configUrl).resolve();
+    }
+
+    /**
+     * Return the {@link RegistryUtils} instance used to access helper Registry functionality
+     *
+     * @return The {@link RegistryUtils} instance
+     */
+    public RegistryUtils getRegistryUtils() {
+        return _registryUtils;
+    }
+
+    /**
+     * Return the {@link RegistryExtensionConfig} instance used to access the Registry Extension
+     * configuration settings
+     *
+     * @return The {@link RegistryExtensionConfig} instance
+     */
+    public RegistryExtensionConfig getConfig() {
+        return _config;
     }
 }

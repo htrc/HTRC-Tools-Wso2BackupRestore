@@ -21,7 +21,7 @@ public class Utils {
      * @param is The input stream
      * @return The SHA1 checksum
      * @throws NoSuchAlgorithmException Thrown if an invalid algorithm was requested
-     * @throws IOException Thrown if an error occurs while reading from the input stream
+     * @throws IOException              Thrown if an error occurs while reading from the input stream
      */
     public static String sha1(final InputStream is) throws NoSuchAlgorithmException, IOException {
         final MessageDigest messageDigest = MessageDigest.getInstance("SHA1");
@@ -40,18 +40,16 @@ public class Utils {
     /**
      * Java 7 version of Java 8's Map.getOrDefault
      *
-     * @param map The map
-     * @param key The key
+     * @param map          The map
+     * @param key          The key
      * @param defaultValue The default value
-     * @param <K> The key type
-     * @param <V> The value type
+     * @param <K>          The key type
+     * @param <V>          The value type
      * @return The value for the key, if found in the map, otherwise defaultValue
      */
-    public static <K,V> V getOrDefault(Map<K, V> map, K key, V defaultValue) {
-        if (map.containsKey(key))
-            return map.get(key);
-        else
-            return defaultValue;
+    public static <K, V> V getOrDefault(Map<K, V> map, K key, V defaultValue) {
+        if (map.containsKey(key)) { return map.get(key); }
+        else { return defaultValue; }
     }
 
     /**
@@ -67,7 +65,7 @@ public class Utils {
      * <code>"{}"</code>, where the {@code prefix} is <code>"{"</code>, the
      * {@code suffix} is <code>"}"</code> and nothing has been added to the
      * {@code StringJoiner}.
-     *
+     * <p>
      * Copied from Java 8 source
      */
     public static final class StringJoiner {
@@ -100,8 +98,8 @@ public class Utils {
          * {@code prefix} or {@code suffix} (or properties thereof) in the result,
          * unless {@code setEmptyValue} has first been called.
          *
-         * @param  delimiter the sequence of characters to be used between each
-         *         element added to the {@code StringJoiner} value
+         * @param delimiter the sequence of characters to be used between each
+         *                  element added to the {@code StringJoiner} value
          * @throws NullPointerException if {@code delimiter} is {@code null}
          */
         public StringJoiner(CharSequence delimiter) {
@@ -116,16 +114,16 @@ public class Utils {
          * {@code prefix + suffix} (or properties thereof) in the result, unless
          * {@code setEmptyValue} has first been called.
          *
-         * @param  delimiter the sequence of characters to be used between each
-         *         element added to the {@code StringJoiner}
-         * @param  prefix the sequence of characters to be used at the beginning
-         * @param  suffix the sequence of characters to be used at the end
+         * @param delimiter the sequence of characters to be used between each
+         *                  element added to the {@code StringJoiner}
+         * @param prefix    the sequence of characters to be used at the beginning
+         * @param suffix    the sequence of characters to be used at the end
          * @throws NullPointerException if {@code prefix}, {@code delimiter}, or
-         *         {@code suffix} is {@code null}
+         *                              {@code suffix} is {@code null}
          */
         public StringJoiner(CharSequence delimiter,
-            CharSequence prefix,
-            CharSequence suffix) {
+                            CharSequence prefix,
+                            CharSequence suffix) {
             Objects.requireNonNull(prefix, "The prefix must not be null");
             Objects.requireNonNull(delimiter, "The delimiter must not be null");
             Objects.requireNonNull(suffix, "The suffix must not be null");
@@ -144,15 +142,17 @@ public class Utils {
          * called, the {@code StringJoiner} is no longer considered empty, even if
          * the element(s) added correspond to the empty {@code String}.
          *
-         * @param  emptyValue the characters to return as the value of an empty
-         *         {@code StringJoiner}
+         * @param emptyValue the characters to return as the value of an empty
+         *                   {@code StringJoiner}
          * @return this {@code StringJoiner} itself so the calls may be chained
          * @throws NullPointerException when the {@code emptyValue} parameter is
-         *         {@code null}
+         *                              {@code null}
          */
         public StringJoiner setEmptyValue(CharSequence emptyValue) {
-            this.emptyValue = Objects.requireNonNull(emptyValue,
-                "The empty value must not be null").toString();
+            this.emptyValue = Objects.requireNonNull(
+                emptyValue,
+                "The empty value must not be null"
+            ).toString();
             return this;
         }
 
@@ -168,10 +168,12 @@ public class Utils {
         public String toString() {
             if (value == null) {
                 return emptyValue;
-            } else {
+            }
+            else {
                 if (suffix.equals("")) {
                     return value.toString();
-                } else {
+                }
+                else {
                     int initialLength = value.length();
                     String result = value.append(suffix).toString();
                     // reset value to pre-append initialLength
@@ -186,7 +188,7 @@ public class Utils {
          * element of the {@code StringJoiner} value. If {@code newElement} is
          * {@code null}, then {@code "null"} is added.
          *
-         * @param  newElement The element to add
+         * @param newElement The element to add
          * @return a reference to this {@code StringJoiner}
          */
         public StringJoiner add(CharSequence newElement) {
@@ -194,15 +196,25 @@ public class Utils {
             return this;
         }
 
+        private StringBuilder prepareBuilder() {
+            if (value != null) {
+                value.append(delimiter);
+            }
+            else {
+                value = new StringBuilder().append(prefix);
+            }
+            return value;
+        }
+
         /**
          * Adds the contents of the given {@code StringJoiner} without prefix and
          * suffix as the next element if it is non-empty. If the given {@code
          * StringJoiner} is empty, the call has no effect.
-         *
+         * <p>
          * <p>A {@code StringJoiner} is empty if {@link #add(CharSequence) add()}
          * has never been called, and if {@code merge()} has never been called
          * with a non-empty {@code StringJoiner} argument.
-         *
+         * <p>
          * <p>If the other {@code StringJoiner} is using a different delimiter,
          * then elements from the other {@code StringJoiner} are concatenated with
          * that delimiter and the result is appended to this {@code StringJoiner}
@@ -210,8 +222,8 @@ public class Utils {
          *
          * @param other The {@code StringJoiner} whose contents should be merged
          *              into this one
-         * @throws NullPointerException if the other {@code StringJoiner} is null
          * @return This {@code StringJoiner}
+         * @throws NullPointerException if the other {@code StringJoiner} is null
          */
         public StringJoiner merge(StringJoiner other) {
             Objects.requireNonNull(other);
@@ -224,15 +236,6 @@ public class Utils {
                 builder.append(other.value, other.prefix.length(), length);
             }
             return this;
-        }
-
-        private StringBuilder prepareBuilder() {
-            if (value != null) {
-                value.append(delimiter);
-            } else {
-                value = new StringBuilder().append(prefix);
-            }
-            return value;
         }
 
         /**

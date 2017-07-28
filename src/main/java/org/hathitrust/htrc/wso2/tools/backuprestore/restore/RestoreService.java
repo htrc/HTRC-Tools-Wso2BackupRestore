@@ -45,7 +45,8 @@ public class RestoreService extends HttpServlet {
         try {
             RestoreAction restoreAction = new RestoreAction(backupRestore, progressWriter);
             restoreAction.restore(backupDir);
-        } catch (BackupRestoreException e) {
+        }
+        catch (BackupRestoreException e) {
             e.printStackTrace(progressWriter);
             progressWriter.flush();
             resp.setStatus(HttpStatus.SC_METHOD_FAILURE);

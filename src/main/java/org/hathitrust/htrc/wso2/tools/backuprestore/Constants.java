@@ -73,4 +73,9 @@ public class Constants {
      */
     public static final String HTRC_PROP_VOLCOUNT = "htrc.volumeCount";
 
+    /**
+     * The version for the current backup format
+     */
+    public static final String BACKUP_VERSION = "1.2";
+
 }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schema xmlns="http://www.w3.org/2001/XMLSchema"
-    xmlns:file="http://registry.htrc.i3.illinois.edu/entities/file"
-    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/file"
-    elementFormDefault="qualified">
+<schema xmlns:file="http://registry.htrc.i3.illinois.edu/entities/file"
+        xmlns="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="http://registry.htrc.i3.illinois.edu/entities/file"
+        elementFormDefault="qualified">
 
     <complexType name="Entry">
         <sequence>

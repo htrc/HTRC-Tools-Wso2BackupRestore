@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schema xmlns="http://www.w3.org/2001/XMLSchema"
-    xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
-    targetNamespace="http://registry.htrc.i3.illinois.edu/entities/workset"
-    elementFormDefault="qualified">
+<schema xmlns:workset="http://registry.htrc.i3.illinois.edu/entities/workset"
+        xmlns="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="http://registry.htrc.i3.illinois.edu/entities/workset"
+        elementFormDefault="qualified">
 
     <include schemaLocation="tag.xsd"/>
     <include schemaLocation="volume.xsd"/>

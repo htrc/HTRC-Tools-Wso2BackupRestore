@@ -24,6 +24,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,7 +83,7 @@ public class BackupAction {
     /**
      * Backup constructor
      *
-     * @param backupRestore Instance holding configuration and other useful references
+     * @param backupRestore  Instance holding configuration and other useful references
      * @param progressWriter The writer where progress information is written to
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
      */
@@ -99,7 +100,8 @@ public class BackupAction {
             this.userStoreManager = userRealm.getUserStoreManager();
             this.authorizationManager = userRealm.getAuthorizationManager();
             this.jaxbVolumesContext = JAXBContext.newInstance(Volumes.class, Volume.class);
-        } catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
+        }
+        catch (org.wso2.carbon.user.core.UserStoreException | RegistryException | JAXBException e) {
             throw new BackupRestoreException("Could not initialize the backup function", e);
         }
     }
@@ -181,12 +183,14 @@ public class BackupAction {
 
         log("Saving backup file to %s...", backupDir);
         saveBackup(backup, backupDir);
+
+        log("All done!");
     }
 
     /**
      * Saves the backup
      *
-     * @param backup The backup instance
+     * @param backup    The backup instance
      * @param backupDir The directory to save the backup to
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
      */
@@ -203,7 +207,8 @@ public class BackupAction {
             try (Writer writer = new FileWriter(new File(backupDir, "backup.xml"))) {
                 marshaller.marshal(backup, writer);
             }
-        } catch (IOException | JAXBException e) {
+        }
+        catch (IOException | JAXBException e) {
             throw new BackupRestoreException("Error while saving backup", e);
         }
     }
@@ -223,7 +228,8 @@ public class BackupAction {
             publicFilespace.setRegFiles(publicFilesRoot.getRegFiles());
 
             return publicFilespace;
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Error retrieving public files", e);
         }
     }
@@ -242,12 +248,13 @@ public class BackupAction {
             if (resource.getContent() != null) {
                 try (InputStream contentStream = resource.getContentStream()) {
                     result = (Volumes) jaxbVolumesContext.createUnmarshaller()
-                        .unmarshal(contentStream);
+                                                         .unmarshal(contentStream);
                 }
             }
 
             return result;
-        } catch (JAXBException | IOException e) {
+        }
+        catch (JAXBException | IOException e) {
             throw new RegistryException("Error unmarshalling workset volumes", e);
         }
     }
@@ -266,7 +273,8 @@ public class BackupAction {
         Volumes volumes = getWorksetVolumesFromResource(resource);
         if (volumes != null) {
             worksetContent.setVolumes(volumes.getVolumes());
-        } else {
+        }
+        else {
             worksetContent = null;
         }
 
@@ -361,22 +369,22 @@ public class BackupAction {
                 List<Workset> worksets = userWorksets.getWorksets();
 
                 for (String child : userWorksetCollection.getChildren()) {
-                    Resource resource;
                     try {
-                        resource = adminRegistry.get(child);
-                    } catch (AuthorizationFailedException afe) {
-                        log("Error: AuthorizationFailed for '%s' (%s) - ignoring", child,
-                            afe.getMessage());
-                        continue;
+                        Resource resource = adminRegistry.get(child);
+                        Workset workset = getWorksetFromResource(resource);
+                        worksets.add(workset);
                     }
-
-                    Workset workset = getWorksetFromResource(resource);
-                    worksets.add(workset);
+                    catch (AuthorizationFailedException afe) {
+                        log("Error: AuthorizationFailed for '%s' (Message: %s) - ignoring",
+                            child, afe.getMessage()
+                        );
+                    }
                 }
             }
 
             return userWorksets;
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Error retrieving user worksets for: " + userName, e);
         }
     }
@@ -395,7 +403,7 @@ public class BackupAction {
     /**
      * Saves a copy of a set of registry files to disk
      *
-     * @param files The files
+     * @param files    The files
      * @param rootPath The root path for the files
      * @param filesDir The directory where to save the files
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
@@ -410,22 +418,25 @@ public class BackupAction {
                 }
                 if (file.getContentType().equals("collection")) {
                     backupFiles(file.getRegFiles(), rootPath, filesDir);
-                } else {
+                }
+                else {
                     Resource resource = adminRegistry.get(fullPath);
                     String checksum = file.getChecksum();
                     File resFile = new File(filesDir, checksum);
                     if (!resFile.exists()) {
                         try (InputStream contentStream = resource.getContentStream();
-                            OutputStream outputStream = new FileOutputStream(resFile)) {
+                             OutputStream outputStream = new FileOutputStream(resFile)) {
                             IOUtils.copy(contentStream, outputStream);
-                        } catch (Exception e) {
-                            throw new RegistryException("Error retrieving resource content stream",
-                                e);
+                        }
+                        catch (Exception e) {
+                            throw new RegistryException(
+                                "Error retrieving resource content stream", e);
                         }
                     }
                 }
             }
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Error while backing up files", e);
         }
     }
@@ -434,7 +445,7 @@ public class BackupAction {
      * Recurses a folder (registry collection) hierarchy and maps it to an object structure
      *
      * @param filesPath The path to start at
-     * @param path The path to relative-ize the founds paths to
+     * @param path      The path to relative-ize the founds paths to
      * @param recursive True to recurse, False otherwise
      * @return The `RegFile` object structure mirroring the registry structure
      * @throws RegistryException Thrown if an error occurs while accessing the registry
@@ -450,7 +461,8 @@ public class BackupAction {
                 RegFile childEntry;
                 if (recursive) {
                     childEntry = treeWalk(filesPath, child, recursive);
-                } else {
+                }
+                else {
                     Resource childResource = adminRegistry.get(child);
                     childEntry = getResourceAsRegFile(childResource, filesPath);
                 }
@@ -471,7 +483,7 @@ public class BackupAction {
      *
      * @param resId The resource id
      * @return The string encoding the resource' permissions (GDPA = get, delete, put, authorize);
-     *         upper case means the permission is allowed, lowercase means the permission is denied
+     * upper case means the permission is allowed, lowercase means the permission is denied
      * @throws RegistryException Thrown if an error occurs while accessing the registry
      */
     protected String getPermissionsForResource(String resId) throws RegistryException {
@@ -484,8 +496,10 @@ public class BackupAction {
                 .getAllowedRolesForResource(resId, ActionConstants.DELETE);
             String[] allowedPut = authorizationManager
                 .getAllowedRolesForResource(resId, ActionConstants.PUT);
-            String[] allowedAuthorize = authorizationManager.getAllowedRolesForResource(resId,
-                AccessControlConstants.AUTHORIZE);
+            String[] allowedAuthorize = authorizationManager.getAllowedRolesForResource(
+                resId,
+                AccessControlConstants.AUTHORIZE
+            );
 
             String[] deniedGet = authorizationManager
                 .getDeniedRolesForResource(resId, ActionConstants.GET);
@@ -493,24 +507,26 @@ public class BackupAction {
                 .getDeniedRolesForResource(resId, ActionConstants.DELETE);
             String[] deniedPut = authorizationManager
                 .getDeniedRolesForResource(resId, ActionConstants.PUT);
-            String[] deniedAuthorize = authorizationManager.getDeniedRolesForResource(resId,
-                AccessControlConstants.AUTHORIZE);
+            String[] deniedAuthorize = authorizationManager.getDeniedRolesForResource(
+                resId,
+                AccessControlConstants.AUTHORIZE
+            );
 
             Map<String, String> rolePerms = new HashMap<>();
             for (String roleName : allowedGet) {
-                if (roleName.equalsIgnoreCase(adminRoleName)) continue;
+                if (roleName.equalsIgnoreCase(adminRoleName)) { continue; }
                 rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "G");
             }
             for (String roleName : allowedDelete) {
-                if (roleName.equalsIgnoreCase(adminRoleName)) continue;
+                if (roleName.equalsIgnoreCase(adminRoleName)) { continue; }
                 rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "D");
             }
             for (String roleName : allowedPut) {
-                if (roleName.equalsIgnoreCase(adminRoleName)) continue;
+                if (roleName.equalsIgnoreCase(adminRoleName)) { continue; }
                 rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "P");
             }
             for (String roleName : allowedAuthorize) {
-                if (roleName.equalsIgnoreCase(adminRoleName)) continue;
+                if (roleName.equalsIgnoreCase(adminRoleName)) { continue; }
                 rolePerms.put(roleName, Utils.getOrDefault(rolePerms, roleName, "") + "A");
             }
             for (String roleName : deniedGet) {
@@ -532,7 +548,8 @@ public class BackupAction {
             }
 
             return joiner.toString();
-        } catch (UserStoreException e) {
+        }
+        catch (UserStoreException e) {
             throw new RegistryException("Error retrieving resource permissions for: " + resId, e);
         }
     }
@@ -540,7 +557,7 @@ public class BackupAction {
     /**
      * Encodes a registry resource into a `RegFile` object
      *
-     * @param resource The registry resource
+     * @param resource  The registry resource
      * @param filesPath The path to relative-ize to
      * @return The `RegFile` instance
      * @throws RegistryException Thrown if an error occurs while accessing the registry
@@ -553,11 +570,13 @@ public class BackupAction {
         RegFile regFile = new RegFile();
         if (resource instanceof Collection) {
             regFile.setContentType("collection");
-        } else {
+        }
+        else {
             regFile.setContentType(resource.getMediaType());
             try (InputStream contentStream = resource.getContentStream()) {
                 regFile.setChecksum(Utils.sha1(contentStream));
-            } catch (Exception e) {
+            }
+            catch (Exception e) {
                 throw new RegistryException("Error retrieving resource content stream", e);
             }
         }
@@ -613,7 +632,8 @@ public class BackupAction {
             }
 
             return userFiles;
-        } catch (RegistryException e) {
+        }
+        catch (RegistryException e) {
             throw new BackupRestoreException("Error retrieving user files for: " + userName, e);
         }
     }
@@ -621,7 +641,7 @@ public class BackupAction {
     /**
      * Retrieves a user's profile claims
      *
-     * @param userName The user name
+     * @param userName              The user name
      * @param excludedProfileClaims The profile claims to exclude
      * @return The list of profile claims
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
@@ -635,8 +655,7 @@ public class BackupAction {
             List<Claim> userClaims = new Vector<>();
             for (org.wso2.carbon.user.core.claim.Claim wso2Claim : wso2Claims) {
                 String claimUri = wso2Claim.getClaimUri();
-                if (excludedProfileClaims.contains(claimUri))
-                    continue;
+                if (excludedProfileClaims.contains(claimUri)) { continue; }
 
                 Claim claim = new Claim();
                 claim.setUri(claimUri);
@@ -645,7 +664,8 @@ public class BackupAction {
             }
 
             return userClaims;
-        } catch (UserStoreException e) {
+        }
+        catch (UserStoreException e) {
             throw new BackupRestoreException(
                 "Error retrieving user profile claims for: " + userName, e);
         }
@@ -654,7 +674,7 @@ public class BackupAction {
     /**
      * Retrieves the list of users (with optional exclusions)
      *
-     * @param excludedUsers The set of users to exclude
+     * @param excludedUsers         The set of users to exclude
      * @param excludedProfileClaims The set of profile claims to exclude
      * @return The list of users
      * @throws BackupRestoreException Thrown if an error occurs during the backup process
@@ -665,34 +685,29 @@ public class BackupAction {
             String[] wso2Users = userStoreManager.listUsers("*", Integer.MAX_VALUE);
             List<User> users = new ArrayList<>(wso2Users.length);
 
-            Set<String> excludedRoles = new HashSet<>();
-            excludedRoles.add(registryUtils.getEveryoneRole());
-            excludedRoles.add("everyone");
-
             for (String userName : wso2Users) {
                 if (excludedUsers.contains(userName)) {
                     continue;
                 }
 
-                List<Claim> userProfileClaims = getUserProfileClaims(userName, excludedProfileClaims);
-                List<String> userRoles = new Vector<>();
-                for (String role : userStoreManager.getRoleListOfUser(userName)) {
-                    if (excludedRoles.contains(role))
-                        continue;
-
-                    userRoles.add(role);
-                }
+                List<Claim> userProfileClaims =
+                    getUserProfileClaims(userName, excludedProfileClaims);
+                List<String> userRoles =
+                    Arrays.asList(userStoreManager.getRoleListOfUser(userName));
+                String userHome = config.getUserHomePath(userName);
 
                 User user = new User();
                 user.setName(userName);
                 user.setClaims(userProfileClaims);
                 user.setRoles(userRoles);
+                user.setHasHome(adminRegistry.resourceExists(userHome));
 
                 users.add(user);
             }
 
             return users;
-        } catch (UserStoreException e) {
+        }
+        catch (UserStoreException | RegistryException e) {
             throw new BackupRestoreException("Error while retrieving users", e);
         }
     }
@@ -706,17 +721,11 @@ public class BackupAction {
      */
     protected List<Role> getAllRoles(Set<String> excludedRoles) throws BackupRestoreException {
         try {
-            List<String> allRoleNames = new Vector<>();
-            for (String roleName : userStoreManager.getRoleNames()) {
-                if (excludedRoles.contains(roleName))
-                    continue;
-
-                allRoleNames.add(roleName);
-            }
-
             List<Role> roles = new ArrayList<>();
 
-            for (String roleName : allRoleNames) {
+            for (String roleName : userStoreManager.getRoleNames()) {
+                if (excludedRoles.contains(roleName)) { continue; }
+
                 List<String> rolePermissions = getRolePermissions(roleName);
 
                 Role role = new Role();
@@ -727,7 +736,8 @@ public class BackupAction {
             }
 
             return roles;
-        } catch (UserAdminException | UserStoreException e) {
+        }
+        catch (UserAdminException | UserStoreException e) {
             throw new BackupRestoreException("Cannot retrieve roles", e);
         }
     }
@@ -735,7 +745,7 @@ public class BackupAction {
     /**
      * Logs a message to the progress log
      *
-     * @param format The message format
+     * @param format  The message format
      * @param objects The optional message context
      */
     protected void log(String format, Object... objects) {
@@ -777,13 +787,15 @@ public class BackupAction {
             everyoneRole.setPermissions(getRolePermissions(everyoneRoleName));
 
             BackupMeta backupMeta = new BackupMeta();
+            backupMeta.setVersion(Constants.BACKUP_VERSION);
             backupMeta.setCreatedAt(Calendar.getInstance());
             backupMeta.setAdminUserName(adminUserName);
             backupMeta.setAdminRoleName(adminRoleName);
             backupMeta.setEveryoneRole(everyoneRole);
 
             return backupMeta;
-        } catch (UserAdminException e) {
+        }
+        catch (UserAdminException e) {
             throw new BackupRestoreException("Cannot create backup meta", e);
         }
     }

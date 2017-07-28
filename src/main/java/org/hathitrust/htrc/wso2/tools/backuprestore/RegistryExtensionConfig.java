@@ -95,16 +95,6 @@ public class RegistryExtensionConfig {
     }
 
     /**
-     * Return the location where user worksets are stored in the registry
-     *
-     * @param userName The user name
-     * @return The location where user worksets are stored in the registry
-     */
-    public String getUserWorksetsPath(String userName) {
-        return String.format(_cfgUserWorksetsPath, userName);
-    }
-
-    /**
      * Return the location where user files are stored in the registry
      *
      * @param userName The user name
@@ -118,11 +108,21 @@ public class RegistryExtensionConfig {
      * Return the registry path for the given workset, for the given user
      *
      * @param worksetId The workset id (name)
-     * @param userName The user name
+     * @param userName  The user name
      * @return The registry path for the given workset, for the given user
      */
     public String getWorksetPath(String worksetId, String userName) {
         return getUserWorksetsPath(userName) + "/" + worksetId;
+    }
+
+    /**
+     * Return the location where user worksets are stored in the registry
+     *
+     * @param userName The user name
+     * @return The location where user worksets are stored in the registry
+     */
+    public String getUserWorksetsPath(String userName) {
+        return String.format(_cfgUserWorksetsPath, userName);
     }
 
     /**
