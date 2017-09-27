@@ -2,6 +2,7 @@ package org.hathitrust.htrc.wso2.tools.backuprestore.utils;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.wso2.carbon.user.mgt.common.UIPermissionNode;
 
 /**
@@ -40,5 +41,28 @@ public class Wso2Utils {
                 parsePermissions(node, permissions);
             }
         }
+    }
+
+    /**
+     * Checks whether the given set of permissions indicate that everyone is allowed access
+     *
+     * @param permissions The permissions to check
+     * @param everyoneRoleName The name of the "everyone" role
+     * @return True if public access allowed, False otherwise
+     */
+    public static boolean isPublicAccessAllowed(String permissions, String everyoneRoleName) {
+        boolean isPublic = false;
+
+        for (String rolePerms : permissions.split(Pattern.quote("|"))) {
+            String[] permParts = rolePerms.split(":");
+            String role = permParts[0];
+            String perms = permParts[1];
+            if (role.equalsIgnoreCase(everyoneRoleName) && perms.contains("G")) {
+                isPublic = true;
+                break;
+            }
+        }
+
+        return isPublic;
     }
 }
