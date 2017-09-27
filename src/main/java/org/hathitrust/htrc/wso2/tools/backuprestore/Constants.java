@@ -74,6 +74,11 @@ public class Constants {
     public static final String HTRC_PROP_VOLCOUNT = "htrc.volumeCount";
 
     /**
+     * The property used to indicate whether a particular resource is public or private
+     */
+    public static final String HTRC_PROP_PUBLIC = "htrc.public";
+
+    /**
      * The version for the current backup format
      */
     public static final String BACKUP_VERSION = "1.2";

@@ -46,6 +46,7 @@ import org.hathitrust.htrc.wso2.tools.backuprestore.HTRCMediaTypes;
 import org.hathitrust.htrc.wso2.tools.backuprestore.RegistryExtensionConfig;
 import org.hathitrust.htrc.wso2.tools.backuprestore.exceptions.BackupRestoreException;
 import org.hathitrust.htrc.wso2.tools.backuprestore.utils.RegistryUtils;
+import org.hathitrust.htrc.wso2.tools.backuprestore.utils.Wso2Utils;
 import org.wso2.carbon.registry.core.ActionConstants;
 import org.wso2.carbon.registry.core.Collection;
 import org.wso2.carbon.registry.core.Resource;
@@ -157,29 +158,97 @@ public class RestoreAction {
 
         setEveryoneRolePermissions(backupMeta.getEveryoneRole());
 
+        ///////////////////
+        // Sanity checks
+        ///////////////////
+
+        log("Performing sanity checks:");
+        Set<String> allRoleNames = new HashSet<>();
+        for (Role role : backup.getRoles())
+            allRoleNames.add(role.getName().toLowerCase());
+
+        Set<String> allUserNames = new HashSet<>();
+        for (User user : backup.getUsers())
+            allUserNames.add(user.getName().toLowerCase());
+
+        Set<String> usersWithData = new HashSet<>();
+        for (Workset workset : backup.getWorksets())
+            usersWithData.add(workset.getMetadata().getAuthor().toLowerCase());
+        for (UserFiles userFiles : backup.getUserFilespace())
+            usersWithData.add(userFiles.getUser().toLowerCase());
+
+        // - check that for every role there is a username associated
+        log("Checking that for every role there is an associated username...");
+        Set<String> orphanRoles = new HashSet<>(allRoleNames);
+        orphanRoles.removeAll(allUserNames);
+        if (!orphanRoles.isEmpty()) {
+            for (String roleName : orphanRoles)
+                log("WARN: orphan role: %s", roleName);
+        }
+
+        // - check that for every username there is a role associated
+        log("Checking that for every username there is an associated role...");
+        Set<String> orphanUsers = new HashSet<>(allUserNames);
+        orphanUsers.removeAll(allRoleNames);
+        if (!orphanUsers.isEmpty()) {
+            for (String userName : orphanUsers)
+                log("WARN: orphan user: %s", userName);
+        }
+
+        // - check that all users that own either files or worksets exist
+        Set<String> invalidUsersWithData = new HashSet<>(usersWithData);
+        invalidUsersWithData.removeAll(allUserNames);
+        if (!invalidUsersWithData.isEmpty()) {
+            for (String userName : invalidUsersWithData)
+                log("WARN: orphaned user with data: %s", userName);
+        }
+
+        // End sanity checks
+
+        Set<String> skipUsers = new HashSet<>(invalidUsersWithData);
+
         Set<String> reservedRoleNames = getReservedRoleNames();
         for (Role role : backup.getRoles()) {
-            if (reservedRoleNames.contains(role.getName().toLowerCase())) {
-                log("CONFLICT! Cannot restore reserved role name: %s", role.getName());
+            String roleName = role.getName().toLowerCase();
+//            if (orphanRoles.contains(roleName)) {
+//                log("Skipping orphaned role '%s'...", roleName);
+//                continue;
+//            }
+            if (reservedRoleNames.contains(roleName)) {
+                log("CONFLICT! Cannot restore reserved role name: %s", roleName);
                 continue;
             }
-            log("Creating role '%s'...", role.getName());
+            log("Creating role '%s'...", roleName);
             createRole(role);
         }
 
         Set<String> reservedUserNames = getReservedUserNames();
         for (User user : backup.getUsers()) {
-            String userName = user.getName();
-            if (reservedUserNames.contains(userName.toLowerCase())) {
+            String userName = user.getName().toLowerCase();
+//            if (orphanUsers.contains(userName)) {
+//                log("Skipping orphaned user '%s'...", userName);
+//                continue;
+//            }
+            if (reservedUserNames.contains(userName)) {
                 log("CONFLICT! Cannot restore reserved user name: %s", userName);
                 continue;
             }
             log("Creating user '%s'...", userName);
-            createUser(user);
+            try {
+                createUser(user);
+            }
+            catch (BackupRestoreException e) {
+                log("Cannot create user '%s': %s", userName, e.getMessage());
+                skipUsers.add(userName);
+            }
         }
 
         for (UserFiles userFiles : backup.getUserFilespace()) {
-            String userName = userFiles.getUser();
+            String userName = userFiles.getUser().toLowerCase();
+            if (skipUsers.contains(userName)) {
+                log("WARN: Skipping restore of files for user %s", userName);
+                continue;
+            }
             log("Restoring files for user %s...", userName);
             String regUserFiles = config.getUserFilesPath(userName);
             restoreFiles(userFiles.getRegFiles(), regUserFiles, filesDir, roleMap);
@@ -195,7 +264,11 @@ public class RestoreAction {
         for (Workset workset : backup.getWorksets()) {
             WorksetMeta worksetMeta = workset.getMetadata();
             String worksetName = worksetMeta.getName();
-            String worksetOwner = worksetMeta.getAuthor();
+            String worksetOwner = worksetMeta.getAuthor().toLowerCase();
+            if (skipUsers.contains(worksetOwner)) {
+                log("WARN: Skipping restore of workset '%s' for user %s!", worksetName, worksetOwner);
+                continue;
+            }
             log("Restoring workset '%s' of user '%s'", worksetName, worksetOwner);
             restoreWorkset(workset);
         }
@@ -350,6 +423,8 @@ public class RestoreAction {
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
     protected void createRole(Role role) throws BackupRestoreException {
+        String roleName = role.getName().toLowerCase();
+
         try {
             List<String> rolePermissions = role.getPermissions();
             Permission[] permissions = new Permission[rolePermissions.size()];
@@ -358,10 +433,10 @@ public class RestoreAction {
                 permissions[i] = new Permission(permission, UserMgtConstants.EXECUTE_ACTION);
             }
 
-            userStoreManager.addRole(role.getName(), null, permissions);
+            userStoreManager.addRole(roleName, null, permissions);
         }
         catch (UserStoreException e) {
-            throw new BackupRestoreException("Unable to create role: " + role.getName(), e);
+            throw new BackupRestoreException("Unable to create role: " + roleName, e);
         }
     }
 
@@ -372,9 +447,9 @@ public class RestoreAction {
      * @throws BackupRestoreException Thrown if an error occurs during the restore process
      */
     protected void createUser(User user) throws BackupRestoreException {
-        try {
-            String userName = user.getName();
+        String userName = user.getName().toLowerCase();
 
+        try {
             Map<String, String> userClaims = new HashMap<>();
             for (Claim claim : user.getClaims()) {
                 if (!claim.getUri().startsWith("http://wso2.org/claims/")) { continue; }
@@ -393,8 +468,8 @@ public class RestoreAction {
             }
         }
         catch (org.wso2.carbon.user.core.UserStoreException e) {
-            log("Error while creating user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
-            //throw new BackupRestoreException("Unable to create user: " + user.getName(), e);
+            //log("Error while creating user: '%s' (Cause: %s)\n", user.getName(), e.getMessage());
+            throw new BackupRestoreException("Unable to create user: " + userName, e);
         }
     }
 
@@ -519,6 +594,7 @@ public class RestoreAction {
                 }
 
                 String description = file.getDescription();
+                String permissions = file.getPermissions();
                 if (file.getContentType().equals("collection")) {
                     Collection collection = adminRegistry.newCollection();
                     collection.setDescription(description);
@@ -527,7 +603,7 @@ public class RestoreAction {
                         collection.setProperty(p.getKey(), p.getValue());
                     }
                     fullPath = adminRegistry.put(fullPath, collection);
-                    setResourceRolePermissions(fullPath, file.getPermissions(), roleMap);
+                    setResourceRolePermissions(fullPath, permissions, roleMap);
                     setCollectionMetadata(fullPath,
                                           owner, file.getCreatedTime().getTime(),
                                           file.getLastModifiedBy(), file.getLastModified().getTime()
@@ -558,8 +634,11 @@ public class RestoreAction {
                             res.setProperty(p.getKey(), p.getValue());
                         }
 
+                        boolean isPublic = Wso2Utils.isPublicAccessAllowed(permissions, registryUtils.getEveryoneRole());
+                        res.setProperty(Constants.HTRC_PROP_PUBLIC, Boolean.toString(isPublic));
+
                         fullPath = adminRegistry.put(fullPath, res);
-                        setResourceRolePermissions(fullPath, file.getPermissions(), roleMap);
+                        setResourceRolePermissions(fullPath, permissions, roleMap);
                         setResourceMetadata(fullPath,
                                             owner, file.getCreatedTime().getTime(),
                                             file.getLastModifiedBy(),
@@ -719,7 +798,7 @@ public class RestoreAction {
             WorksetMeta worksetMeta = workset.getMetadata();
             WorksetContent worksetContent = workset.getContent();
 
-            String author = worksetMeta.getAuthor();
+            String author = worksetMeta.getAuthor().toLowerCase();
             UserRegistry registry = registryUtils.getUserRegistry(author);
 
             Resource resource = registry.newResource();
@@ -745,6 +824,7 @@ public class RestoreAction {
             }
 
             resource.setProperty(Constants.HTRC_PROP_VOLCOUNT, Integer.toString(volumeCount));
+            resource.setProperty(Constants.HTRC_PROP_PUBLIC, Boolean.toString(worksetMeta.isPublic()));
 
             String worksetPath =
                 String.format("%s/%s", config.getUserWorksetsPath(author), worksetMeta.getName());

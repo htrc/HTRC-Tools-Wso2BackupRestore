@@ -318,21 +318,8 @@ public class BackupAction {
         String sVolCount = resource.getProperty(Constants.HTRC_PROP_VOLCOUNT);
         int volumeCount = (sVolCount != null) ? Integer.parseInt(sVolCount) : -1;
         worksetMeta.setVolumeCount(volumeCount);
-
-        String permissions = getPermissionsForResource(resource.getId());
-        String everyoneRole = userStoreManager.getRealmConfiguration().getEveryOneRoleName();
-        boolean isPublic = false;
-        for (String rolePerms : permissions.split(Pattern.quote("|"))) {
-            String[] permParts = rolePerms.split(":");
-            String role = permParts[0];
-            String perms = permParts[1];
-            if (role.equalsIgnoreCase(everyoneRole) && perms.contains("G")) {
-                isPublic = true;
-                break;
-            }
-        }
+        boolean isPublic = isPublic(resource);
         worksetMeta.setPublic(isPublic);
-
         worksetMeta.setLastModifiedBy(resource.getLastUpdaterUserName());
 
         Calendar calendar = Calendar.getInstance();
@@ -349,6 +336,20 @@ public class BackupAction {
         }
 
         return worksetMeta;
+    }
+
+    /**
+     * Checks whether a resource is public or private based on its permissions
+     *
+     * @param resource The resource to check
+     * @return True if public, False otherwise
+     * @throws RegistryException Thrown if an error occurs while accessing the registry
+     */
+    protected boolean isPublic(Resource resource) throws RegistryException {
+        String permissions = getPermissionsForResource(resource.getId());
+        String everyoneRole = userStoreManager.getRealmConfiguration().getEveryOneRoleName();
+
+        return Wso2Utils.isPublicAccessAllowed(permissions, everyoneRole);
     }
 
     /**
